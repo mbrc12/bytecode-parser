@@ -13,7 +13,8 @@ import Control.Monad.Trans.Class  (lift)
 import ByteCodeParser.BasicTypes (
         mAGIC, ClassName, 
         getClassFilePath, RawClassFile(..), 
-        Error, produceError)
+        Error, produceError,
+        MajorVersion(..), toMajorVersion)
 
 -- | Gives the Lazy ByteString stream of the input from the class file
 getClassFileStream :: ClassName                 -- ^ The input class
@@ -30,12 +31,22 @@ readMagicNumber = do
            then return magic
            else throwE $ produceError "Magic Number is incorrect."
 
+readVersions :: ExceptT Error Get (Word16, MajorVersion)
+readVersions = do
+        minor <- lift getWord16be
+        major <- lift getWord16be
+        let maybeMajorVersion = toMajorVersion $ major
+        case maybeMajorVersion of
+          Right majorVersion -> return (minor, majorVersion)
+          Left  errorMessage -> throwE errorMessage
+       
 
 -- | The main reader. This calls many other other sub readers, and produces a RawClassFile structure
 reader :: ExceptT Error Get RawClassFile
 reader = do  
         magic <- readMagicNumber
-        return $ RawClassFile magic
+        (minor, major) <- readVersions
+        return $ RawClassFile magic minor major
 
 -- | Reads the class file and forms a parsed RawClassFile structure
 readRawClassFile :: ClassName
