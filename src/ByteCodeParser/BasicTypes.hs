@@ -7,8 +7,14 @@ module ByteCodeParser.BasicTypes (
         RawClassFile(..),
         Error,
         produceError,
-        MajorVersion,
-        toMajorVersion
+        MajorVersion(..),
+        toMajorVersion,
+        ConstType(..),
+        toConstType,    -- 03617151747
+        CInfo(..), 
+        ConstantInfo(..),
+        ReferenceKind,
+        toReferenceKind
 ) where
 
 import System.IO (FilePath)
@@ -29,11 +35,12 @@ type ClassName = String
 getClassFilePath :: ClassName -> FilePath
 getClassFilePath = (++ classFileExtension)
 
--- | The data of a raw class file, without any parsing. The bytecode is just represented almost as is in this.
+ -- | The data of a raw class file, without any parsing. The bytecode is just represented almost as is in this.
 data RawClassFile = RawClassFile {
-        magicNumber :: Word32,          -- must equal 'mAGIC' for 
-        minorVersion :: Word16,         -- minor version of .class format
-        majorVersion :: MajorVersion    -- major version of .class format
+        magicNumber     :: Word32,              -- must equal 'mAGIC' for 
+        minorVersion    :: Word16,              -- minor version of .class format
+        majorVersion    :: MajorVersion,        -- major version of .class format
+        constantPool    :: [ConstantInfo]       -- Constant Pool
 
                                  } deriving Show
 
@@ -44,28 +51,123 @@ type Error = String
 produceError :: String -> Error
 produceError = ("Reader Error: " ++)
 
+
+-- | Java Major Version.
 data MajorVersion = 
-                JavaSE9 | 
-                JavaSE8 | 
-                JavaSE7 |
-                JavaSE6 |
-                JavaSE5 |
-                JDK14   |
-                JDK13   |
-                JDK12   |
+                JavaSE9         | 
+                JavaSE8         | 
+                JavaSE7         |
+                JavaSE6         |
+                JavaSE5         |
+                JDK14           |
+                JDK13           |
+                JDK12           |
                 JDK11           
                 deriving Show
 
+-- | Convert integer to the respective major version. See the JVM spec.
 toMajorVersion :: Word16 -> Either Error MajorVersion
 toMajorVersion major = case major of
-                          0x35        -> Right JavaSE9
-                          0x34        -> Right JavaSE8
-                          0x33        -> Right JavaSE7
-                          0x32        -> Right JavaSE6
-                          0x31        -> Right JavaSE5
-                          0x30        -> Right JDK14
-                          0x2F        -> Right JDK13
-                          0x2E        -> Right JDK12
-                          0x2D        -> Right JDK11
-                          otherwise   -> Left $ produceError "Invalid major version."
+                          0x35          -> Right JavaSE9
+                          0x34          -> Right JavaSE8
+                          0x33          -> Right JavaSE7
+                          0x32          -> Right JavaSE6
+                          0x31          -> Right JavaSE5
+                          0x30          -> Right JDK14
+                          0x2F          -> Right JDK13
+                          0x2E          -> Right JDK12
+                          0x2D          -> Right JDK11
+                          _             -> Left $ produceError $ "Invalid major version value " ++ show major
+
+-- | Constant type in ConstPool
+data ConstType = 
+                CClass                  |
+                CFieldRef               |      
+                CMethodRef              |    
+                CInterfaceMethodRef     |
+                CString                 |
+                CInteger                |
+                CFloat                  |
+                CLong                   |
+                CDouble                 |
+                CNameAndType            |
+                CUtf8                   |
+                CMethodHandle           |
+                CMethodType             |
+                CInvokeDynamic
+                deriving Show
+
+-- | Convert integer to ConstType
+toConstType :: Word8 -> Either Error ConstType
+toConstType value = case value of
+                        7               -> Right CClass
+                        9               -> Right CFieldRef
+                        10              -> Right CMethodRef
+                        11              -> Right CInterfaceMethodRef
+                        8               -> Right CString
+                        3               -> Right CInteger
+                        4               -> Right CFloat
+                        5               -> Right CLong
+                        6               -> Right CDouble
+                        12              -> Right CNameAndType
+                        1               -> Right CUtf8
+                        15              -> Right CMethodHandle
+                        16              -> Right CMethodType
+                        17              -> Right CInvokeDynamic
+                        _               -> Left $ produceError $ "Invalid Constant Type value " ++ show value
+
+-- Constant Info structure
+data CInfo = 
+                CClassI                 { nameIndex :: Word16 }                                                 |
+                CFieldRefI              { classIndex :: Word16, nameAndTypeIndex :: Word16 }                    |
+                CMethodRefI             { classIndex :: Word16, nameAndTypeIndex :: Word16 }                    |
+                CInterfaceMethodRefI    { classIndex :: Word16, nameAndTypeIndex :: Word16 }                    |
+                CStringI                { stringIndex :: Word16 }                                               |              
+                CIntegerI               { bytei :: Word32 }                                                     |
+                CFloatI                 { bytef :: Word32 }                                                     |
+                CLongI                  { high  :: Word32, low :: Word32 }                                      |
+                CDoubleI                { high  :: Word32, low :: Word32 }                                      |
+                CNameAndTypeI           { nameIndex :: Word16, descriptorIndex :: Word16 }                      |
+                CUtf8I                  { len :: Word16, bytes :: String }                                      |
+                CMethodHandleI          { referenceKind :: ReferenceKind, referenceIndex :: Word16 }            |
+                CMethodTypeI            { descriptorIndex :: Word16 }                                           |
+                CInvokeDynamicI         { bootstrapMethodAttrIndex :: Word16, nameAndTypeIndex :: Word16 }
+                deriving Show
+
+-- Constant Pool Info Structure
+data ConstantInfo = ConstantInfo {
+                        constType       :: ConstType,
+                        info            :: CInfo
+                                 } deriving Show
+
+-- Reference Kind for method handles, see 'CMethodHandleI'
+data ReferenceKind = 
+                RGetField               |
+                RGetStatic              |
+                RPutField               |
+                RPutStatic              |
+                RInvokeVirtual          |
+                RInvokeStatic           |
+                RInvokeSpecial          |
+                RNewInvokeSpecial       |
+                RInvokeInterface
+                deriving Show
+
+
+-- Convert integer to ReferenceKind
+toReferenceKind :: Word8 -> Either Error ReferenceKind
+toReferenceKind value = case value of
+                          1     -> Right RGetField
+                          2     -> Right RGetStatic
+                          3     -> Right RPutField
+                          4     -> Right RPutStatic
+                          5     -> Right RInvokeVirtual
+                          6     -> Right RInvokeStatic
+                          7     -> Right RInvokeSpecial
+                          8     -> Right RNewInvokeSpecial
+                          9     -> Right RInvokeInterface
+                          _     -> Left $ produceError $ "Invalid reference kind number" ++ show value
+                                
+
+
 
