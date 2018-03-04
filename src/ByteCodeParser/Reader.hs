@@ -23,9 +23,6 @@ import ByteCodeParser.BasicTypes (
         ConstantInfo(..), CInfo(..),
         ReferenceKind(..), toReferenceKind)
 
---throwE :: Error -> ExceptT Error a
---throwE x = except 
-
 -- | Gives the Lazy ByteString stream of the input from the class file
 getClassFileStream :: ClassName                 -- ^ The input class
                    -> IO BL.ByteString          -- ^ The output bytestring stream, wrapped in IO
