@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module ByteCodeParser.BasicTypes (
+        (!@),
         mAGIC,
         ClassName,
         getClassFilePath,
@@ -14,12 +15,21 @@ module ByteCodeParser.BasicTypes (
         CInfo(..), 
         ConstantInfo(..),
         ReferenceKind,
-        toReferenceKind
+        toReferenceKind,
+        AccessFlag(..),
+        toAccessFlags
 ) where
 
 import System.IO (FilePath)
 import Data.Word (Word8, Word16, Word32)
 import Data.Either
+import Data.Bits
+import Data.List (zip, sort)
+
+
+-- !! for [a] -> Word16
+(!@) :: [a] -> Word16 -> a
+(!@) xs pos = xs !! fromIntegral pos
 
 -- | The Java Class MAGIC number
 mAGIC :: Word32
@@ -40,8 +50,10 @@ data RawClassFile = RawClassFile {
         magicNumber     :: Word32,              -- must equal 'mAGIC' for 
         minorVersion    :: Word16,              -- minor version of .class format
         majorVersion    :: MajorVersion,        -- major version of .class format
-        constantPool    :: [ConstantInfo]       -- Constant Pool
-
+        constantPool    :: [ConstantInfo],      -- Constant Pool
+        accessFlags     :: [AccessFlag],       -- Access Flags
+        thisClass       :: String,              -- Name of this class
+        superClass      :: Maybe String         -- Name of superclass if any
                                  } deriving Show
 
 -- | Error is used to indicate an error in the form of a string.
@@ -168,6 +180,25 @@ toReferenceKind value = case value of
                           9     -> Right RInvokeInterface
                           _     -> Left $ produceError $ "Invalid reference kind number" ++ show value
                                 
+
+-- Access Flags data structure
+data AccessFlag = 
+        APublic         |
+        AFinal          |
+        ASuper          |
+        AInterface      |
+        AAbstract       |
+        ASynthetic      |
+        AAnnotation     |
+        AEnum           
+        deriving (Show, Eq, Ord)
+
+-- convert Accessflag integer to [AccessFlag]
+toAccessFlags :: Word16 -> [AccessFlag]
+toAccessFlags flags = sort $ map (([APublic, AFinal, ASuper, AInterface, AAbstract, ASynthetic, AAnnotation, AEnum] !!).fst) $
+                                filter (\(_, bits) -> flags .&. bits /= 0) $
+                                        zip [0..] [0x0001, 0x0010, 0x0020, 0x0200, 0x0400, 0x1000, 0x2000, 0x4000]
+
 
 
 

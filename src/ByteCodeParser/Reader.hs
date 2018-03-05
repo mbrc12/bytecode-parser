@@ -15,13 +15,15 @@ import Control.Monad (when, forM)
 import Control.Monad.Trans.Except (ExceptT, runExceptT, except, throwE)
 import Control.Monad.Trans.Class  (lift)
 import ByteCodeParser.BasicTypes (
+        (!@),
         mAGIC, ClassName, 
         getClassFilePath, RawClassFile(..), 
         Error, produceError,
         MajorVersion(..), toMajorVersion,
         ConstType(..), toConstType, 
         ConstantInfo(..), CInfo(..),
-        ReferenceKind(..), toReferenceKind)
+        ReferenceKind(..), toReferenceKind,
+        AccessFlag(..), toAccessFlags)
 
 -- | Gives the Lazy ByteString stream of the input from the class file
 getClassFileStream :: ClassName                 -- ^ The input class
@@ -121,7 +123,7 @@ readConstFromPool = do
                 getBytes :: Word16 -> Get String
                 getBytes len =  (fmap.fmap) (chr.fromIntegral) $ forM [1..len] $ const getWord8  
 
--- Read the Constant Pool
+-- | Read the Constant Pool
 readConstantPool :: ExceptT Error Get [ConstantInfo]
 readConstantPool = do
         cpsize <- lift getWord16be
@@ -129,19 +131,50 @@ readConstantPool = do
 
         -- cpsize - 1 because of ConstantPool size convention
         forM [1..cpsize - 1] $ const readConstFromPool
-                   
-                
+
+-- | Reads the access flags
+readAccessFlags :: ExceptT Error Get [AccessFlag]
+readAccessFlags = do
+        flags <- lift getWord16be
+        return $ toAccessFlags flags
+
+
+-- | Get the name of this class
+readThisClass :: [ConstantInfo] -> ExceptT Error Get String
+readThisClass constPool = do
+        index <- lift getWord16be
+        let classNameIndex = nameIndex.info $ constPool!@(index - 1)
+            className = bytes.info $ constPool!@classNameIndex
+        return className
+
+-- | Get the name of the super class
+readSuperClass :: [ConstantInfo] -> ExceptT Error Get (Maybe String)
+readSuperClass constPool = do
+        index <- lift getWord16be
+        if index == 0 
+           then return Nothing
+           else (return.Just) $
+                   let classNameIndex = nameIndex.info $ constPool!@(index - 1)
+                    in bytes.info $ constPool!@classNameIndex
+
+
 -- | The main reader. This calls many other other sub readers, and produces a RawClassFile structure
 reader :: ExceptT Error Get RawClassFile
 reader = do  
         magic           <- readMagicNumber
         (minor, major)  <- readVersions
         constPool       <- readConstantPool
+        accessFlags     <- readAccessFlags
+        thisClass       <- readThisClass constPool
+        superClass      <- readSuperClass constPool
         return $ 
                 RawClassFile    magic 
                                 minor 
                                 major 
                                 constPool
+                                accessFlags
+                                thisClass
+                                superClass
 
 -- | Reads the class file and forms a parsed RawClassFile structure
 readRawClassFile :: ClassName
