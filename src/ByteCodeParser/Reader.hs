@@ -170,6 +170,16 @@ readSuperClass constPool = do
                    let classNameIndex = nameIndex.info $ constPool!@(index - 1)
                     in bytes.info $ constPool!@classNameIndex
 
+-- | Interfaces and interface count
+readInterfaces :: ExceptT Error Get [Word16]
+readInterfaces = do
+        interfacesCount <- lift getWord16be
+        forM [1..interfacesCount] (\_ -> pure pred <*> lift getWord16be) 
+
+
+-- | Get all the fields
+readFields :: ExceptT Error Get [FieldInfo]
+readFields 
 
 -- | The main reader. This calls many other other sub readers, and produces a RawClassFile structure
 reader :: ExceptT Error Get RawClassFile
@@ -180,6 +190,7 @@ reader = do
         accessFlags     <- readAccessFlags
         thisClass       <- readThisClass constPool
         superClass      <- readSuperClass constPool
+        interfaces      <- readInterfaces
         return $ 
                 RawClassFile    magic 
                                 minor 
@@ -188,6 +199,7 @@ reader = do
                                 accessFlags
                                 thisClass
                                 superClass
+                                interfaces
 
 -- | Reads the class file and forms a parsed RawClassFile structure
 readRawClassFile :: ClassName
