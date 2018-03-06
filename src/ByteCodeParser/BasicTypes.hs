@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings, DuplicateRecordFields #-}
 
 module ByteCodeParser.BasicTypes (
         (!@),
@@ -11,7 +11,7 @@ module ByteCodeParser.BasicTypes (
         MajorVersion(..),
         toMajorVersion,
         ConstType(..),
-        toConstType,    -- 03617151747
+        toConstType,
         CInfo(..), 
         ConstantInfo(..),
         ReferenceKind,
@@ -53,7 +53,8 @@ data RawClassFile = RawClassFile {
         constantPool    :: [ConstantInfo],      -- Constant Pool
         accessFlags     :: [AccessFlag],       -- Access Flags
         thisClass       :: String,              -- Name of this class
-        superClass      :: Maybe String         -- Name of superclass if any
+        superClass      :: Maybe String,         -- Name of superclass if any
+        interfaces      :: [Word16]
                                  } deriving Show
 
 -- | Error is used to indicate an error in the form of a string.
@@ -181,7 +182,7 @@ toReferenceKind value = case value of
                           _     -> Left $ produceError $ "Invalid reference kind number" ++ show value
                                 
 
--- Access Flags data structure
+-- | Access Flags data structure
 data AccessFlag = 
         APublic         |
         AFinal          |
@@ -193,12 +194,201 @@ data AccessFlag =
         AEnum           
         deriving (Show, Eq, Ord)
 
--- convert Accessflag integer to [AccessFlag]
+-- | Convert Accessflag integer to [AccessFlag]
 toAccessFlags :: Word16 -> [AccessFlag]
 toAccessFlags flags = sort $ map (([APublic, AFinal, ASuper, AInterface, AAbstract, ASynthetic, AAnnotation, AEnum] !!).fst) $
                                 filter (\(_, bits) -> flags .&. bits /= 0) $
                                         zip [0..] [0x0001, 0x0010, 0x0020, 0x0200, 0x0400, 0x1000, 0x2000, 0x4000]
 
+
+-- | Attributes 
+data AttributeType = 
+        ATConstantValue                         |
+        ATCode                                  |
+        ATStackMapTable                         |
+        ATExceptions                            |
+        ATInnerClasses                          |
+        ATEnclosingMethod                       |
+        ATSynthetic                             |
+        ATSourceDebugExtension                  |
+        ATLineNumberTable                       |
+        ATLocalVariableTable                    |          
+        ATLocalVariableTypeTable                |
+        ATDeprecated                            |
+        ATRuntimeVisibleAnnotations             |
+        ATRuntimeInvisibleAnnotations           |
+        ATRuntimeVisibleParameterAnnotations    |
+        ATRuntimeInvisibleParameterAnnotations  |
+        ATRuntimeVisibleTypeAnnotations         |
+        ATRuntimeInvisibleTypeAnnotations       |
+        ATAnnotationDefault                     |
+        ATBootstrapMethods                      |
+        ATMethodParameters                     
+        deriving Show
+
+-- | See 'AICode'
+data ExceptionTableEntry = ExceptionTableEntry {
+                                startPc         :: Word16,
+                                endPc           :: Word16,
+                                handlerPc       :: Word16,
+                                catchType       :: Word16
+                        } deriving Show
+
+-- | See 'AILineNumberTable'
+data LineNumberTableEntry = LineNumberTableEntry {
+                                startPc         :: Word16,
+                                lineNumber      :: Word16
+                        } deriving Show
+
+-- | See 'AILocalVariableTable'
+data LocalVariableTableEntry = LocalVariableTableEntry {
+                                startPc         :: Word16,
+                                length'         :: Word16,
+                                nameIndex       :: Word16,
+                                descriptorIndex :: Word16,
+                                index           :: Word16
+                        } deriving Show
+
+-- | See 'AILocalVariableTypeTable'
+data LocalVariableTypeTableEntry = LocalVariableTypeTableEntry {
+                                startPc         :: Word16,
+                                length'         :: Word16,
+                                nameIndex       :: Word16,
+                                signatureIndex  :: Word16,
+                                index           :: Word16
+                        } deriving Show
+
+-- | See AIBootstrapMethods
+data BootstrapMethod = BootstrapMethod {
+                                bootstrapMethodRef :: Word16,
+                                bootstrapArguments :: [Word16]
+                        } deriving Show
+
+-- | See 'AIMethodParameters
+data MethodParameter = MethodParameter {
+                                nameIndex       :: Word16,
+                                accessFlags     :: [AccessFlag]
+                        } deriving Show
+
+
+-- | See 'AIRuntimeVisibleParameterAnnotations' etc.
+data ParameterAnnotations = ParameterAnnotations {
+                                annotations     :: [Annotation]
+                        } deriving Show
+
+-- Attribute Info data
+data AInfo = 
+        AIConstantValue 
+                {       constantValueIndex      :: Word16
+                } |
+        AICode 
+                {       maxStack                :: Word16,
+                        maxLocals               :: Word16,
+                        code                    :: [Instruction],               -- not defined yet
+                        exceptionTable          :: [ExceptionTableEntry], 
+                        attributes              :: [AttributeInfo]
+                } |
+        AIStackMapTable 
+                {
+                        entries                 :: [StackMapFrameEntry]         -- not defined yet
+                } |
+
+        AIExceptions 
+                {
+                        exceptionIndexTable     :: [Word16] 
+                } |
+        AIInnerClasses
+                {
+                        innerClassInfoIndex     :: Word16,
+                        outerClassInfoIndex     :: Word16,
+                        innerNameIndex          :: Word16,
+                        innerClassAccessFlags   :: [AccessFlag]
+                } |
+        AIEnclosingSingleMethod
+                {
+                        classIndex              :: Word16,
+                        methodIndex             :: Word16
+                } |
+        AISynthetic 
+                {
+                } |
+        AISignature
+                {
+                        signatureIndex          :: Word16
+                } |
+        AISourceFile
+                {
+                        sourceFileIndex         :: Word16
+                } |
+        AISourceDebugExtension
+                {
+                        debugExtension          :: [Word8]
+                } |
+        AILineNumberTable
+                {
+                        lineNumberTable         :: [LineNumberTableEntry]
+                } |
+        AILocalVariableTable
+                {
+                        localVariableTable      :: [LocalVariableTableEntry]
+                } |
+        AILocalVariableTypeTable
+                {
+                        localVariableTypeTable  :: [LocalVariableTypeTableEntry]
+                } |
+        AIDeprecated 
+                {
+                } |
+        AIRuntimeVisibleAnnotations
+                {
+                        annotations             :: [Annotation]                 -- not defined yet
+                } |
+        AIRuntimeInvisibleAnnotations 
+                {
+                        annotations             :: [Annotation]
+                } |
+        AIRuntimeVisibleParameterAnnotations 
+                {
+                        parameterAnnotations    :: [ParameterAnnotations]
+                } |
+        AIRuntimeInvisibleParameterAnnotations 
+                {
+                        parameterAnnotations    :: [ParameterAnnotations]
+                } |
+        AIRuntimeVisibleTypeAnnotations 
+                {
+                        annotations             :: [TypeAnnotation]             -- not defined yet
+                } |
+        AIRuntimeInvisibleTypeAnnotations 
+                {
+                        annotations             :: [TypeAnnotation]
+                } |
+        AIBootstrapMethods
+                {
+                        bootstrapMethods        :: [BootstrapMethod]
+                } |
+        AIMethodParameters 
+                {
+                        parameters              :: [MethodParameter]
+                }
+        deriving Show        
+
+
+-- Attribute Info structure containing an AttributeType, and AInfo
+data AttributeInfo = AttributeInfo {
+                        attributeType :: AttributeType,
+                        attributeInfo :: AInfo
+                } deriving Show
+
+
+
+-- | Field Info structure
+data FieldInfo = FieldInfo {
+                        accessFlags     :: [AccessFlag],
+                        name            :: String,
+                        descriptor      :: String,
+                        attributes      :: [AttributeInfo]
+                } deriving Show
 
 
 
