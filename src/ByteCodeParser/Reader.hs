@@ -5,6 +5,7 @@ module ByteCodeParser.Reader (
 ) where
 
 import qualified Data.ByteString.Lazy as BL
+import Debug.Trace(trace)
 import Data.Binary
 import Data.Binary.Get (Get, runGet, getWord8, getWord16be, getWord32be)
 import System.IO (FilePath, Handle, IOMode, withFile, hGetContents)
@@ -12,6 +13,7 @@ import Data.Word (Word8, Word16, Word32)
 import Data.Either
 import Data.Char (chr)
 import Control.Monad (when, forM)
+import Control.Applicative (pure, (<*>))
 import Control.Monad.Trans.Except (ExceptT, runExceptT, except, throwE)
 import Control.Monad.Trans.Class  (lift)
 import ByteCodeParser.BasicTypes (
@@ -51,7 +53,7 @@ readVersions = do
           Left  errorMessage -> throwE errorMessage
 
 -- Read a Constant from the pool, see 'readConstantPool'
-readConstFromPool :: ExceptT Error Get ConstantInfo
+readConstFromPool :: ExceptT Error Get (ConstantInfo, Int)
 readConstFromPool = do
         tag <- lift getWord8
         constType <- case toConstType tag of
@@ -116,7 +118,7 @@ readConstFromPool = do
                                                 nameAndTypeIndex <- lift getWord16be
                                                 return $ CInvokeDynamicI (bootstrapMethodAttrIndex - 1) (nameAndTypeIndex - 1)
 
-        return $ ConstantInfo constType cinfo
+        return (ConstantInfo constType cinfo, if constType == CLong || constType == CDouble then 2 else 1)
         
         where
                 -- | getBytes gets len bytes from the input
@@ -130,7 +132,18 @@ readConstantPool = do
         when (cpsize == 0) $ throwE $ produceError "Constant pool size is 0, should be atleast 1."
 
         -- cpsize - 1 because of ConstantPool size convention
-        forM [1..cpsize - 1] $ const readConstFromPool
+        cpsize <- return $ trace ("Constant pool size: " ++ show cpsize) cpsize
+        
+        readPool $ fromIntegral (cpsize - 1)
+        
+        where
+                -- reads elements from the pool according to their byte size, specifically, CLong and CDouble are 2 places each
+                readPool :: Int -> ExceptT Error Get [ConstantInfo]
+                readPool rem = if rem == 0 
+                                  then return []
+                                  else do 
+                                          (c_elem, c_positions) <- readConstFromPool
+                                          pure (c_elem :) <*> readPool (rem - c_positions)
 
 -- | Reads the access flags
 readAccessFlags :: ExceptT Error Get [AccessFlag]

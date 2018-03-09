@@ -75,7 +75,7 @@ data MajorVersion =
                 JDK13           |
                 JDK12           |
                 JDK11           
-                deriving Show
+                deriving (Show, Eq)
 
 -- | Convert integer to the respective major version. See the JVM spec.
 toMajorVersion :: Word16 -> Either Error MajorVersion
@@ -107,7 +107,7 @@ data ConstType =
                 CMethodHandle           |
                 CMethodType             |
                 CInvokeDynamic
-                deriving Show
+                deriving (Show, Eq)
 
 -- | Convert integer to ConstType
 toConstType :: Word8 -> Either Error ConstType
@@ -163,7 +163,7 @@ data ReferenceKind =
                 RInvokeSpecial          |
                 RNewInvokeSpecial       |
                 RInvokeInterface
-                deriving Show
+                deriving (Show, Eq)
 
 
 -- Convert integer to ReferenceKind
