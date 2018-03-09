@@ -17,7 +17,12 @@ module ByteCodeParser.BasicTypes (
         ReferenceKind,
         toReferenceKind,
         AccessFlag(..),
-        toAccessFlags
+        toAccessFlags,
+        AttributeType(..),
+        AInfo(..),
+        AttributeInfo(..),
+        toAttributeType,
+        parseable
 ) where
 
 import System.IO (FilePath)
@@ -210,6 +215,8 @@ data AttributeType =
         ATInnerClasses                          |
         ATEnclosingMethod                       |
         ATSynthetic                             |
+        ATSignature                             |
+        ATSourceFile                            |
         ATSourceDebugExtension                  |
         ATLineNumberTable                       |
         ATLocalVariableTable                    |          
@@ -224,8 +231,11 @@ data AttributeType =
         ATAnnotationDefault                     |
         ATBootstrapMethods                      |
         ATMethodParameters                     
-        deriving Show
+        deriving (Show, Eq)
 
+{- This part contains structures that may be required in the future to properly parse the raw data represented in the AInfo structure. This is
+    commented out because some parts have not been implemented -}
+{-
 -- | See 'AICode'
 data ExceptionTableEntry = ExceptionTableEntry {
                                 startPc         :: Word16,
@@ -276,102 +286,153 @@ data ParameterAnnotations = ParameterAnnotations {
                                 annotations     :: [Annotation]
                         } deriving Show
 
--- Attribute Info data
+-}
+
+-- | Attribute Info data
+{- TODO: Some structures below are represented as just bytes :: [Word8], which are the raw unparsed bytes.
+         Since this is not a general purpose library, but is intended to be used within the Purity checker,
+         not all the attributes are of value. Please add parsing code for them, as and when required, and
+         replace the appropriate structure with its parsed format (possibly adding more structure).
+
+         Template structures for some of them (maybe incomplete) are written in the commented out parts.
+         They should be uncommented out once the parsing code is written.
+
+         Also see, the array 'parseable' defined later.
+-}
+
 data AInfo = 
         AIConstantValue 
-                {       constantValueIndex      :: Word16
+                {      
+                        bytes                   :: [Word8]
+                        -- constantValueIndex      :: Word16
                 } |
         AICode 
-                {       maxStack                :: Word16,
-                        maxLocals               :: Word16,
-                        code                    :: [Instruction],               -- not defined yet
-                        exceptionTable          :: [ExceptionTableEntry], 
-                        attributes              :: [AttributeInfo]
+                {      
+                        bytes                   :: [Word8]
+                        --maxStack                :: Word16,
+                        --maxLocals               :: Word16,
+                        --code                    :: [Instruction],               -- not defined yet
+                        --exceptionTable          :: [ExceptionTableEntry], 
+                        --attributes              :: [AttributeInfo]
                 } |
         AIStackMapTable 
                 {
-                        entries                 :: [StackMapFrameEntry]         -- not defined yet
+                        bytes                   :: [Word8]
+                        --entries                 :: [StackMapFrameEntry]         -- not defined yet
                 } |
 
         AIExceptions 
                 {
-                        exceptionIndexTable     :: [Word16] 
+                        bytes                   :: [Word8]
+                        --exceptionIndexTable     :: [Word16] 
                 } |
         AIInnerClasses
                 {
-                        innerClassInfoIndex     :: Word16,
-                        outerClassInfoIndex     :: Word16,
-                        innerNameIndex          :: Word16,
-                        innerClassAccessFlags   :: [AccessFlag]
+                        bytes                   :: [Word8]
+                        --innerClassInfoIndex     :: Word16,
+                        --outerClassInfoIndex     :: Word16,
+                        --innerNameIndex          :: Word16,
+                        --innerClassAccessFlags   :: [AccessFlag]
                 } |
         AIEnclosingSingleMethod
                 {
-                        classIndex              :: Word16,
-                        methodIndex             :: Word16
+                        bytes                   :: [Word8]
+                        --classIndex              :: Word16,
+                        --methodIndex             :: Word16
                 } |
         AISynthetic 
                 {
+                        bytes                   :: [Word8]
                 } |
         AISignature
                 {
-                        signatureIndex          :: Word16
+                        bytes                   :: [Word8]
+                        --signatureIndex          :: Word16
                 } |
         AISourceFile
                 {
-                        sourceFileIndex         :: Word16
+                        bytes                   :: [Word8]
+                        --sourceFileIndex         :: Word16
                 } |
         AISourceDebugExtension
                 {
-                        debugExtension          :: [Word8]
+                        bytes                   :: [Word8]
+                        --debugExtension          :: [Word8]
                 } |
         AILineNumberTable
                 {
-                        lineNumberTable         :: [LineNumberTableEntry]
+                        bytes                   :: [Word8]
+                        --lineNumberTable         :: [LineNumberTableEntry]
                 } |
         AILocalVariableTable
                 {
-                        localVariableTable      :: [LocalVariableTableEntry]
+                        bytes                   :: [Word8]
+                        --localVariableTable      :: [LocalVariableTableEntry]
                 } |
         AILocalVariableTypeTable
                 {
-                        localVariableTypeTable  :: [LocalVariableTypeTableEntry]
+                        bytes                   :: [Word8]
+                        --localVariableTypeTable  :: [LocalVariableTypeTableEntry]
                 } |
         AIDeprecated 
                 {
+                        bytes                   :: [Word8]
                 } |
         AIRuntimeVisibleAnnotations
                 {
-                        annotations             :: [Annotation]                 -- not defined yet
+                        bytes                   :: [Word8]
+                        --annotations             :: [Annotation]                 -- not defined yet
                 } |
         AIRuntimeInvisibleAnnotations 
                 {
-                        annotations             :: [Annotation]
+                        bytes                   :: [Word8]
+                        --annotations             :: [Annotation]
                 } |
         AIRuntimeVisibleParameterAnnotations 
                 {
-                        parameterAnnotations    :: [ParameterAnnotations]
+                        bytes                   :: [Word8]
+                        --parameterAnnotations    :: [ParameterAnnotations]
                 } |
         AIRuntimeInvisibleParameterAnnotations 
                 {
-                        parameterAnnotations    :: [ParameterAnnotations]
+                        bytes                   :: [Word8]
+                        --parameterAnnotations    :: [ParameterAnnotations]
                 } |
         AIRuntimeVisibleTypeAnnotations 
                 {
-                        annotations             :: [TypeAnnotation]             -- not defined yet
+                        bytes                   :: [Word8]
+                        --annotations             :: [TypeAnnotation]             -- not defined yet
                 } |
         AIRuntimeInvisibleTypeAnnotations 
                 {
-                        annotations             :: [TypeAnnotation]
+                        bytes                   :: [Word8]
+                        --annotations             :: [TypeAnnotation]
+                } |
+        AIAnnotationDefault                     
+                {
+                        bytes                   :: [Word8]                      
                 } |
         AIBootstrapMethods
                 {
-                        bootstrapMethods        :: [BootstrapMethod]
+                        bytes                   :: [Word8]
+                        --bootstrapMethods        :: [BootstrapMethod]
                 } |
         AIMethodParameters 
                 {
-                        parameters              :: [MethodParameter]
+                        bytes                   :: [Word8]
+                        --parameters              :: [MethodParameter]
                 }
         deriving Show        
+
+{- TODO: The below list represents the structures which have a structure that 
+    is better than the raw 'bytes' format, and must be parsed by a parser.
+    See Reader.hs for the implementations of attributes that are parseable.
+    Update this as and when a new parser for an attribute is added to
+    'parseAttribute' of Reader.hs. Its needed to update the parser in 
+    'parseParseableAttribute' in Reader.hs
+-}
+parseable :: [AttributeType]
+parseable = []
 
 
 -- Attribute Info structure containing an AttributeType, and AInfo
@@ -381,6 +442,31 @@ data AttributeInfo = AttributeInfo {
                 } deriving Show
 
 
+-- Converts String to represented Attribute Type
+toAttributeType :: String -> Either Error AttributeType
+toAttributeType s = case s of 
+                      "ConstantValue"                           -> Right ATConstantValue
+                      "Code"                                    -> Right ATCode
+                      "StackMapTable"                           -> Right ATStackMapTable
+                      "Exceptions"                              -> Right ATExceptions
+                      "InnerClasses"                            -> Right ATInnerClasses
+                      "EnclosingMethod"                         -> Right ATEnclosingMethod
+                      "Synthetic"                               -> Right ATSynthetic
+                      "Signature"                               -> Right ATSignature
+                      "SourceFile"                              -> Right ATSourceFile
+                      "SourceDebugExtension"                    -> Right ATSourceDebugExtension
+                      "LineNumberTable"                         -> Right ATLineNumberTable
+                      "LocalVariableTypeTable"                  -> Right ATLocalVariableTypeTable
+                      "Deprecated"                              -> Right ATDeprecated
+                      "RuntimeVisibleAnnotations"               -> Right ATRuntimeVisibleAnnotations
+                      "RuntimeInvisibleAnnotations"             -> Right ATRuntimeInvisibleAnnotations
+                      "RuntimeVisibleParameterAnnotations"      -> Right ATRuntimeVisibleParameterAnnotations
+                      "RuntimeInvisibleParameterAnnotations"    -> Right ATRuntimeInvisibleParameterAnnotations
+                      "AnnotationDefault"                       -> Right ATAnnotationDefault
+                      "BootstrapMethods"                        -> Right ATBootstrapMethods
+                      "MethodParameters"                        -> Right ATMethodParameters
+                      _                                         -> Left $ produceError $ "Invalid Attribute Type" ++ s
+                        
 
 -- | Field Info structure
 data FieldInfo = FieldInfo {

@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings, DuplicateRecordFields, ScopedTypeVariables #-}
 
 module ByteCodeParser.Reader (
         readRawClassFile
@@ -25,7 +25,10 @@ import ByteCodeParser.BasicTypes (
         ConstType(..), toConstType, 
         ConstantInfo(..), CInfo(..),
         ReferenceKind(..), toReferenceKind,
-        AccessFlag(..), toAccessFlags)
+        AccessFlag(..), toAccessFlags,
+        parseable, AttributeType(..),
+        AInfo(..), AttributeInfo(..),
+        toAttributeType, parseable)
 
 -- | Gives the Lazy ByteString stream of the input from the class file
 getClassFileStream :: ClassName                 -- ^ The input class
@@ -33,6 +36,9 @@ getClassFileStream :: ClassName                 -- ^ The input class
 getClassFileStream className = 
         BL.readFile classFilePath
         where classFilePath = getClassFilePath className
+
+getRawBytes :: Int -> ExceptT Error Get [Word8]
+getRawBytes how_many = forM [1 .. how_many] (\_ -> lift getWord8) 
 
 -- | Reads the magic number, and checks if its okay.
 readMagicNumber :: ExceptT Error Get Word32
@@ -132,18 +138,22 @@ readConstantPool = do
         when (cpsize == 0) $ throwE $ produceError "Constant pool size is 0, should be atleast 1."
 
         -- cpsize - 1 because of ConstantPool size convention
-        cpsize <- return $ trace ("Constant pool size: " ++ show cpsize) cpsize
         
         readPool $ fromIntegral (cpsize - 1)
         
         where
                 -- reads elements from the pool according to their byte size, specifically, CLong and CDouble are 2 places each
+                -- Note that this duplicates the same value for fields which take up two consecutive locations in the constant pool
+                -- like longs and doubles to keep the constantPool indices okay.
                 readPool :: Int -> ExceptT Error Get [ConstantInfo]
                 readPool rem = if rem == 0 
                                   then return []
                                   else do 
                                           (c_elem, c_positions) <- readConstFromPool
-                                          pure (c_elem :) <*> readPool (rem - c_positions)
+                                          if c_positions == 1 
+                                             then pure (c_elem :) <*> readPool (rem - c_positions)
+                                             else pure ([c_elem, c_elem] ++) <*> readPool (rem - c_positions)
+                                                                
 
 -- | Reads the access flags
 readAccessFlags :: ExceptT Error Get [AccessFlag]
@@ -157,7 +167,7 @@ readThisClass :: [ConstantInfo] -> ExceptT Error Get String
 readThisClass constPool = do
         index <- lift getWord16be
         let classNameIndex = nameIndex.info $ constPool!@(index - 1)
-            className = bytes.info $ constPool!@classNameIndex
+            className = (bytes :: CInfo -> String).info $ constPool!@classNameIndex
         return className
 
 -- | Get the name of the super class
@@ -168,7 +178,7 @@ readSuperClass constPool = do
            then return Nothing
            else (return.Just) $
                    let classNameIndex = nameIndex.info $ constPool!@(index - 1)
-                    in bytes.info $ constPool!@classNameIndex
+                    in (bytes :: CInfo -> String).info $ constPool!@classNameIndex
 
 -- | Interfaces and interface count
 readInterfaces :: ExceptT Error Get [Word16]
@@ -177,11 +187,99 @@ readInterfaces = do
         forM [1..interfacesCount] (\_ -> pure pred <*> lift getWord16be) 
 
 
--- | Get all the fields
-readFields :: ExceptT Error Get [FieldInfo]
-readFields 
+-- | Parse attributes for which there are special methods
+parseParseableAttribute :: AttributeType -> [Word8] -> AInfo
+parseParseableAttribute = undefined
 
--- | The main reader. This calls many other other sub readers, and produces a RawClassFile structure
+-- | Parse the raw bytes info for attributes if possible
+parseAttribute :: AttributeType -> [Word8] -> AInfo
+parseAttribute attributeType byteInfo =
+        case attributeType of 
+                ATConstantValue                         -> if attributeType `elem` parseable
+                                                              then parseParseableAttribute attributeType byteInfo
+                                                              else AIConstantValue byteInfo
+                ATCode                                  -> if attributeType `elem` parseable
+                                                              then parseParseableAttribute attributeType byteInfo
+                                                              else AICode byteInfo
+                ATStackMapTable                         -> if attributeType `elem` parseable
+                                                              then parseParseableAttribute attributeType byteInfo
+                                                              else AIStackMapTable byteInfo
+                ATExceptions                            -> if attributeType `elem` parseable
+                                                              then parseParseableAttribute attributeType byteInfo
+                                                              else AIExceptions byteInfo
+                ATInnerClasses                          -> if attributeType `elem` parseable
+                                                              then parseParseableAttribute attributeType byteInfo
+                                                              else AIInnerClasses byteInfo
+                ATEnclosingMethod                       -> if attributeType `elem` parseable
+                                                              then parseParseableAttribute attributeType byteInfo
+                                                              else AIEnclosingSingleMethod byteInfo
+                ATSynthetic                             -> if attributeType `elem` parseable
+                                                              then parseParseableAttribute attributeType byteInfo
+                                                              else AISynthetic byteInfo
+                ATSignature                             -> if attributeType `elem` parseable
+                                                              then parseParseableAttribute attributeType byteInfo
+                                                              else AISignature byteInfo
+                ATSourceFile                            -> if attributeType `elem` parseable
+                                                              then parseParseableAttribute attributeType byteInfo
+                                                              else AISourceFile byteInfo
+                ATSourceDebugExtension                  -> if attributeType `elem` parseable
+                                                              then parseParseableAttribute attributeType byteInfo
+                                                              else AISourceDebugExtension byteInfo
+                ATLineNumberTable                       -> if attributeType `elem` parseable
+                                                              then parseParseableAttribute attributeType byteInfo
+                                                              else AILineNumberTable byteInfo
+                ATLocalVariableTable                    -> if attributeType `elem` parseable
+                                                              then parseParseableAttribute attributeType byteInfo
+                                                              else AILocalVariableTable byteInfo
+                ATLocalVariableTypeTable                -> if attributeType `elem` parseable
+                                                              then parseParseableAttribute attributeType byteInfo
+                                                              else AILocalVariableTypeTable byteInfo
+                ATDeprecated                            -> if attributeType `elem` parseable
+                                                              then parseParseableAttribute attributeType byteInfo
+                                                              else AIDeprecated byteInfo
+                ATRuntimeVisibleAnnotations             -> if attributeType `elem` parseable
+                                                              then parseParseableAttribute attributeType byteInfo
+                                                              else AIRuntimeVisibleAnnotations byteInfo
+                ATRuntimeInvisibleAnnotations           -> if attributeType `elem` parseable
+                                                              then parseParseableAttribute attributeType byteInfo
+                                                              else AIRuntimeInvisibleAnnotations byteInfo
+                ATRuntimeVisibleParameterAnnotations    -> if attributeType `elem` parseable 
+                                                              then parseParseableAttribute attributeType byteInfo
+                                                              else AIRuntimeVisibleParameterAnnotations byteInfo
+                ATRuntimeInvisibleParameterAnnotations  -> if attributeType `elem` parseable
+                                                              then parseParseableAttribute attributeType byteInfo
+                                                              else AIRuntimeInvisibleParameterAnnotations byteInfo
+                ATRuntimeVisibleTypeAnnotations         -> if attributeType `elem` parseable
+                                                              then parseParseableAttribute attributeType byteInfo
+                                                              else AIRuntimeVisibleTypeAnnotations byteInfo
+                ATRuntimeInvisibleTypeAnnotations       -> if attributeType `elem` parseable
+                                                              then parseParseableAttribute attributeType byteInfo
+                                                              else AIRuntimeInvisibleTypeAnnotations byteInfo
+                ATAnnotationDefault                     -> if attributeType `elem` parseable
+                                                              then parseParseableAttribute attributeType byteInfo
+                                                              else AIAnnotationDefault byteInfo
+                ATBootstrapMethods                      -> if attributeType `elem` parseable
+                                                              then parseParseableAttribute attributeType byteInfo
+                                                              else AIBootstrapMethods byteInfo
+                ATMethodParameters                      -> if attributeType `elem` parseable
+                                                              then parseParseableAttribute attributeType byteInfo
+                                                              else AIMethodParameters byteInfo
+
+readAttribute :: [ConstantInfo] -> ExceptT Error Get AttributeInfo
+readAttribute constPool = do
+        attributeNameIndex <- lift getWord16be
+        
+        let attributeName = (bytes :: CInfo -> String).info $ (constPool !@ (attributeNameIndex - 1) :: ConstantInfo) 
+            attributeType = toAttributeType attributeName
+
+        case attributeType of 
+                Left errorMessage       -> throwE errorMessage
+                Right attrType          -> do 
+                                                attributeLength :: Int  <- pure fromIntegral <*> lift getWord32be
+                                                byteInfo <- getRawBytes attributeLength
+                                                return $ AttributeInfo attrType (parseAttribute attrType byteInfo)
+                                                
+-- | The main reader. This calls many other other sub readers, and produces a RawClassFile structur
 reader :: ExceptT Error Get RawClassFile
 reader = do  
         magic           <- readMagicNumber
