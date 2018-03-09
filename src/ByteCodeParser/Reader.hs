@@ -167,7 +167,7 @@ readThisClass :: [ConstantInfo] -> ExceptT Error Get String
 readThisClass constPool = do
         index <- lift getWord16be
         let classNameIndex = nameIndex.info $ constPool!@(index - 1)
-            className = (bytes :: CInfo -> String).info $ constPool!@classNameIndex
+            className = string.info $ constPool!@classNameIndex
         return className
 
 -- | Get the name of the super class
@@ -178,7 +178,7 @@ readSuperClass constPool = do
            then return Nothing
            else (return.Just) $
                    let classNameIndex = nameIndex.info $ constPool!@(index - 1)
-                    in (bytes :: CInfo -> String).info $ constPool!@classNameIndex
+                    in string.info $ constPool!@classNameIndex
 
 -- | Interfaces and interface count
 readInterfaces :: ExceptT Error Get [Word16]
@@ -269,7 +269,7 @@ readAttribute :: [ConstantInfo] -> ExceptT Error Get AttributeInfo
 readAttribute constPool = do
         attributeNameIndex <- lift getWord16be
         
-        let attributeName = (bytes :: CInfo -> String).info $ (constPool !@ (attributeNameIndex - 1) :: ConstantInfo) 
+        let attributeName = string.info $ (constPool !@ (attributeNameIndex - 1) :: ConstantInfo) 
             attributeType = toAttributeType attributeName
 
         case attributeType of 

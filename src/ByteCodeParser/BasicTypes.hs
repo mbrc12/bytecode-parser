@@ -146,7 +146,7 @@ data CInfo =
                 CLongI                  { high  :: Word32, low :: Word32 }                                      |
                 CDoubleI                { high  :: Word32, low :: Word32 }                                      |
                 CNameAndTypeI           { nameIndex :: Word16, descriptorIndex :: Word16 }                      |
-                CUtf8I                  { len :: Word16, bytes :: String }                                      |
+                CUtf8I                  { len :: Word16, string:: String }                                      |
                 CMethodHandleI          { referenceKind :: ReferenceKind, referenceIndex :: Word16 }            |
                 CMethodTypeI            { descriptorIndex :: Word16 }                                           |
                 CInvokeDynamicI         { bootstrapMethodAttrIndex :: Word16, nameAndTypeIndex :: Word16 }
