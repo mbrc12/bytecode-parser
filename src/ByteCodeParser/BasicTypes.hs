@@ -22,7 +22,9 @@ module ByteCodeParser.BasicTypes (
         AInfo(..),
         AttributeInfo(..),
         toAttributeType,
-        parseable
+        parseable,
+        FieldInfo(..),
+        MethodInfo(..)
 ) where
 
 import System.IO (FilePath)
@@ -32,7 +34,7 @@ import Data.Bits
 import Data.List (zip, sort)
 
 
--- !! for [a] -> Word16
+-- | !! for [a] -> Word16
 (!@) :: [a] -> Word16 -> a
 (!@) xs pos = xs !! fromIntegral pos
 
@@ -59,8 +61,10 @@ data RawClassFile = RawClassFile {
         accessFlags     :: [AccessFlag],       -- Access Flags
         thisClass       :: String,              -- Name of this class
         superClass      :: Maybe String,         -- Name of superclass if any
-        interfaces      :: [Word16]
-                                 } deriving Show
+        interfaces      :: [Word16],
+        fields          :: [FieldInfo],         -- fields                         
+        methods         :: [MethodInfo]         -- methods
+        } deriving Show
 
 -- | Error is used to indicate an error in the form of a string.
 type Error = String 
@@ -315,6 +319,7 @@ data AInfo =
                         --exceptionTable          :: [ExceptionTableEntry], 
                         --attributes              :: [AttributeInfo]
                 } |
+        AIParsedCode |       
         AIStackMapTable 
                 {
                         bytes                   :: [Word8]
@@ -421,7 +426,9 @@ data AInfo =
                 {
                         bytes                   :: [Word8]
                         --parameters              :: [MethodParameter]
-                }
+                } |
+        AIDummy
+                        -- added just for `parseParseableAttribute' in Reader.hs
         deriving Show        
 
 {- TODO: The below list represents the structures which have a structure that 
@@ -432,7 +439,7 @@ data AInfo =
     'parseParseableAttribute' in Reader.hs
 -}
 parseable :: [AttributeType]
-parseable = []
+parseable = [] -- TODO: Add ATCode here
 
 
 -- Attribute Info structure containing an AttributeType, and AInfo
@@ -477,4 +484,9 @@ data FieldInfo = FieldInfo {
                 } deriving Show
 
 
-
+data MethodInfo = MethodInfo {
+                        accessFlags     :: [AccessFlag],
+                        name            :: String,
+                        descriptor      :: String,
+                        attributes      :: [AttributeInfo]
+                } deriving Show

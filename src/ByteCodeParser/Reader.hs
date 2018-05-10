@@ -12,7 +12,7 @@ import System.IO (FilePath, Handle, IOMode, withFile, hGetContents)
 import Data.Word (Word8, Word16, Word32)
 import Data.Either
 import Data.Char (chr)
-import Control.Monad (when, forM)
+import Control.Monad (when, forM, replicateM)
 import Control.Applicative (pure, (<*>))
 import Control.Monad.Trans.Except (ExceptT, runExceptT, except, throwE)
 import Control.Monad.Trans.Class  (lift)
@@ -28,7 +28,8 @@ import ByteCodeParser.BasicTypes (
         AccessFlag(..), toAccessFlags,
         parseable, AttributeType(..),
         AInfo(..), AttributeInfo(..),
-        toAttributeType, parseable)
+        toAttributeType, parseable,
+        FieldInfo(..), MethodInfo(..))
 
 -- | Gives the Lazy ByteString stream of the input from the class file
 getClassFileStream :: ClassName                 -- ^ The input class
@@ -187,10 +188,19 @@ readInterfaces = do
         forM [1..interfacesCount] (\_ -> pure pred <*> lift getWord16be) 
 
 
+
+codeParser :: Get AInfo
+-- returns a AIParsedCode 
+codeParser = return AIParsedCode
+
+
 -- | Parse attributes for which there are special methods
 parseParseableAttribute :: AttributeType -> [Word8] -> AInfo
-parseParseableAttribute = undefined
-
+parseParseableAttribute attrType bytes =
+        case attrType of 
+                ATCode                                  -> runGet codeParser (BL.pack bytes) 
+                _                                       -> AIDummy                               -- added just so that this typechecks 
+        
 -- | Parse the raw bytes info for attributes if possible
 parseAttribute :: AttributeType -> [Word8] -> AInfo
 parseAttribute attributeType byteInfo =
@@ -279,7 +289,40 @@ readAttribute constPool = do
                                                 byteInfo <- getRawBytes attributeLength
                                                 return $ AttributeInfo attrType (parseAttribute attrType byteInfo)
                                                 
--- | The main reader. This calls many other other sub readers, and produces a RawClassFile structur
+-- | Read a field
+readFieldInfo :: [ConstantInfo] -> ExceptT Error Get FieldInfo
+readFieldInfo pool = do
+        accessFlags :: [AccessFlag]     <- pure toAccessFlags <*> lift getWord16be
+        name :: String                  <- pure (\x -> string.info $ pool !@ (x - 1)) <*> lift getWord16be
+        descriptor :: String            <- pure (\x -> string.info $ pool !@ (x - 1)) <*> lift getWord16be
+        attributeCount :: Int           <- pure fromIntegral <*> lift getWord16be
+        attributes :: [AttributeInfo]   <- replicateM attributeCount (readAttribute pool) 
+        return $ FieldInfo accessFlags name descriptor attributes        
+
+-- | Reads the fields from the bytecode
+readFields :: [ConstantInfo] -> ExceptT Error Get [FieldInfo]
+readFields pool = do
+        fieldCount :: Int <- pure fromIntegral <*> lift getWord16be
+        replicateM fieldCount (readFieldInfo pool)
+       
+
+-- | Read a method
+readMethodInfo :: [ConstantInfo] -> ExceptT Error Get MethodInfo
+readMethodInfo pool = do
+        accessFlags :: [AccessFlag]     <- pure toAccessFlags <*> lift getWord16be
+        name :: String                  <- pure (\x -> string.info $ pool !@ (x - 1)) <*> lift getWord16be
+        descriptor :: String            <- pure (\x -> string.info $ pool !@ (x - 1)) <*> lift getWord16be
+        attributeCount :: Int           <- pure fromIntegral <*> lift getWord16be
+        attributes :: [AttributeInfo]   <- replicateM attributeCount (readAttribute pool) 
+        return $ MethodInfo accessFlags name descriptor attributes 
+
+-- | Read the methods from the bytecode
+readMethods :: [ConstantInfo] -> ExceptT Error Get [MethodInfo]
+readMethods pool = do
+        methodCount :: Int <- pure fromIntegral <*> lift getWord16be 
+        replicateM methodCount (readMethodInfo pool)
+
+-- | The main reader. This calls many other other sub readers, and produces a RawClassFile structure
 reader :: ExceptT Error Get RawClassFile
 reader = do  
         magic           <- readMagicNumber
@@ -289,6 +332,8 @@ reader = do
         thisClass       <- readThisClass constPool
         superClass      <- readSuperClass constPool
         interfaces      <- readInterfaces
+        fields          <- readFields constPool
+        methods         <- readMethods constPool
         return $ 
                 RawClassFile    magic 
                                 minor 
@@ -298,6 +343,8 @@ reader = do
                                 thisClass
                                 superClass
                                 interfaces
+                                fields
+                                methods
 
 -- | Reads the class file and forms a parsed RawClassFile structure
 readRawClassFile :: ClassName
