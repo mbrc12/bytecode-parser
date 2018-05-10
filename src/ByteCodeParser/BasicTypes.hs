@@ -24,7 +24,8 @@ module ByteCodeParser.BasicTypes (
         toAttributeType,
         parseable,
         FieldInfo(..),
-        MethodInfo(..)
+        MethodInfo(..),
+        MethodParameter(..)
 ) where
 
 import System.IO (FilePath)
@@ -278,12 +279,6 @@ data BootstrapMethod = BootstrapMethod {
                                 bootstrapArguments :: [Word16]
                         } deriving Show
 
--- | See 'AIMethodParameters
-data MethodParameter = MethodParameter {
-                                nameIndex       :: Word16,
-                                accessFlags     :: [AccessFlag]
-                        } deriving Show
-
 
 -- | See 'AIRuntimeVisibleParameterAnnotations' etc.
 data ParameterAnnotations = ParameterAnnotations {
@@ -291,6 +286,14 @@ data ParameterAnnotations = ParameterAnnotations {
                         } deriving Show
 
 -}
+
+-- | See 'AIMethodParameters
+data MethodParameter = MethodParameter {
+                                name            :: String,
+                                accessFlags     :: [AccessFlag]
+                        } deriving Show
+
+
 
 -- | Attribute Info data
 {- TODO: Some structures below are represented as just bytes :: [Word8], which are the raw unparsed bytes.
@@ -302,6 +305,9 @@ data ParameterAnnotations = ParameterAnnotations {
          They should be uncommented out once the parsing code is written.
 
          Also see, the array 'parseable' defined later.
+
+        **EDIT**: Added on 10/5/18. For all constructors AI<x> that has a AIParsed<x> counterpart, the AI<x> part is there
+                only for 'parseAttribute' in Reader.hs, and for debugging helps.
 -}
 
 data AInfo = 
@@ -319,7 +325,13 @@ data AInfo =
                         --exceptionTable          :: [ExceptionTableEntry], 
                         --attributes              :: [AttributeInfo]
                 } |
-        AIParsedCode |       
+        AIParsedCode 
+                {
+                        maxStack                :: Int,
+                        maxLocals               :: Int,
+                        codeLength              :: Int,
+                        code                    :: [Word8]
+                } |
         AIStackMapTable 
                 {
                         bytes                   :: [Word8]
@@ -427,6 +439,10 @@ data AInfo =
                         bytes                   :: [Word8]
                         --parameters              :: [MethodParameter]
                 } |
+        AIParsedMethodParameters 
+                {
+                        parameters              :: [MethodParameter]
+                } |
         AIDummy
                         -- added just for `parseParseableAttribute' in Reader.hs
         deriving Show        
@@ -439,7 +455,7 @@ data AInfo =
     'parseParseableAttribute' in Reader.hs
 -}
 parseable :: [AttributeType]
-parseable = [] -- TODO: Add ATCode here
+parseable = [ATCode, ATMethodParameters] 
 
 
 -- Attribute Info structure containing an AttributeType, and AInfo
@@ -487,6 +503,7 @@ data FieldInfo = FieldInfo {
 data MethodInfo = MethodInfo {
                         accessFlags     :: [AccessFlag],
                         name            :: String,
-                        descriptor      :: String,
+                        descriptor      :: [(Int, Bool)],       -- see comments on 'descriptorIndices' in Reader.hs for info on what these values mean
+                        descriptorString:: String,
                         attributes      :: [AttributeInfo]
                 } deriving Show

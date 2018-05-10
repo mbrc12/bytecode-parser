@@ -29,7 +29,8 @@ import ByteCodeParser.BasicTypes (
         parseable, AttributeType(..),
         AInfo(..), AttributeInfo(..),
         toAttributeType, parseable,
-        FieldInfo(..), MethodInfo(..))
+        FieldInfo(..), MethodInfo(..),
+        MethodParameter(..))
 
 -- | Gives the Lazy ByteString stream of the input from the class file
 getClassFileStream :: ClassName                 -- ^ The input class
@@ -58,6 +59,39 @@ readVersions = do
         case maybeMajorVersion of
           Right majorVersion -> return (minor, majorVersion)
           Left  errorMessage -> throwE errorMessage
+
+
+baseType        = ['B', 'C', 'D', 'F', 'I', 'J', 'S', 'Z'] :: [Char]
+twoPlaces       = ['J', 'D'] :: [Char]  -- base types that take up two consecutive locations on the stack
+objType         = 'L'
+arrayType       = '['
+
+
+-- | Given a method descriptor this function will return the positions in the local variable array which are of parameters, 
+-- | and if the indexed parameter is a reference (Object/Array), the second argument is true
+descriptorIndices :: String -> [(Int, Bool)]
+descriptorIndices descriptor = recursiveCalc desc2 1
+                                where
+                                        desc2 = takeWhile (')' /=) $ drop 1 descriptor          -- Convert (xxx)yyy -> xxx
+                                        
+                                        recursiveCalc :: String -> Int -> [(Int, Bool)]
+                                        recursiveCalc ("") x = []
+                                        recursiveCalc (c:left) x = if c `elem` baseType
+                                                                    then if c `elem` twoPlaces
+                                                                            then (x, False) : recursiveCalc left (x + 2)
+                                                                            else (x, False) : recursiveCalc left (x + 1)
+                                                                    else if c == objType
+                                                                            then (x, True) : recursiveCalc (drop 1 $ dropWhile (';' /=) left) (x + 1)
+                                                                            else if c == arrayType
+                                                                                    then let arrTypeAnd = dropWhile ('[' ==) left
+                                                                                             arrType    = head arrTypeAnd
+                                                                                         in if arrType == objType
+                                                                                               then (x, True) : recursiveCalc (drop 1 $ dropWhile (';' /=) arrTypeAnd) (x + 1)
+                                                                                               else (x, True) : recursiveCalc (drop 1 arrTypeAnd) (x + 1)
+                                                                                    else []
+
+                                                                         
+
 
 -- Read a Constant from the pool, see 'readConstantPool'
 readConstFromPool :: ExceptT Error Get (ConstantInfo, Int)
@@ -191,88 +225,110 @@ readInterfaces = do
 
 codeParser :: Get AInfo
 -- returns a AIParsedCode 
-codeParser = return AIParsedCode
+codeParser = do
+        maxStack :: Int         <- pure fromIntegral <*> getWord16be
+        maxLocals :: Int        <- pure fromIntegral <*> getWord16be
+        codeLength :: Int       <- pure fromIntegral <*> getWord32be
+        code :: [Word8]         <- replicateM codeLength getWord8
+        return $ AIParsedCode maxStack maxLocals codeLength code
 
+getStringFromConstPool constPool x = (string.info) $ constPool !@ (x - 1)
+
+readParameter :: [ConstantInfo] -> Get MethodParameter
+readParameter constPool = do
+        name :: String <- pure (getStringFromConstPool constPool) <*> getWord16be
+        accessFlags    <- pure toAccessFlags <*> getWord16be
+        return $ MethodParameter name accessFlags
+
+methodParametersParser :: [ConstantInfo] -> Get AInfo
+-- returns the parsed methodParameters
+methodParametersParser constPool = do
+        paramCount :: Int               <- pure fromIntegral <*> getWord8
+        params     :: [MethodParameter] <- replicateM paramCount (readParameter constPool)
+        return $ AIParsedMethodParameters params
 
 -- | Parse attributes for which there are special methods
-parseParseableAttribute :: AttributeType -> [Word8] -> AInfo
-parseParseableAttribute attrType bytes =
-        case attrType of 
-                ATCode                                  -> runGet codeParser (BL.pack bytes) 
+parseParseableAttribute :: [ConstantInfo] -> AttributeType -> [Word8] -> AInfo
+parseParseableAttribute constPool attrType bytes =
+        case attrType of
+                ATCode                                  -> runGet codeParser (BL.pack bytes)
+
+                ATMethodParameters                      -> runGet (methodParametersParser constPool) (BL.pack bytes)
+
                 _                                       -> AIDummy                               -- added just so that this typechecks 
-        
+                
 -- | Parse the raw bytes info for attributes if possible
-parseAttribute :: AttributeType -> [Word8] -> AInfo
-parseAttribute attributeType byteInfo =
+parseAttribute :: [ConstantInfo] -> AttributeType -> [Word8] -> AInfo
+parseAttribute constPool attributeType byteInfo =
         case attributeType of 
                 ATConstantValue                         -> if attributeType `elem` parseable
-                                                              then parseParseableAttribute attributeType byteInfo
+                                                              then parseParseableAttribute constPool attributeType byteInfo
                                                               else AIConstantValue byteInfo
                 ATCode                                  -> if attributeType `elem` parseable
-                                                              then parseParseableAttribute attributeType byteInfo
+                                                              then parseParseableAttribute constPool attributeType byteInfo
                                                               else AICode byteInfo
                 ATStackMapTable                         -> if attributeType `elem` parseable
-                                                              then parseParseableAttribute attributeType byteInfo
+                                                              then parseParseableAttribute constPool attributeType byteInfo
                                                               else AIStackMapTable byteInfo
                 ATExceptions                            -> if attributeType `elem` parseable
-                                                              then parseParseableAttribute attributeType byteInfo
+                                                              then parseParseableAttribute constPool attributeType byteInfo
                                                               else AIExceptions byteInfo
                 ATInnerClasses                          -> if attributeType `elem` parseable
-                                                              then parseParseableAttribute attributeType byteInfo
+                                                              then parseParseableAttribute constPool attributeType byteInfo
                                                               else AIInnerClasses byteInfo
                 ATEnclosingMethod                       -> if attributeType `elem` parseable
-                                                              then parseParseableAttribute attributeType byteInfo
+                                                              then parseParseableAttribute constPool attributeType byteInfo
                                                               else AIEnclosingSingleMethod byteInfo
                 ATSynthetic                             -> if attributeType `elem` parseable
-                                                              then parseParseableAttribute attributeType byteInfo
+                                                              then parseParseableAttribute constPool attributeType byteInfo
                                                               else AISynthetic byteInfo
                 ATSignature                             -> if attributeType `elem` parseable
-                                                              then parseParseableAttribute attributeType byteInfo
+                                                              then parseParseableAttribute constPool attributeType byteInfo
                                                               else AISignature byteInfo
                 ATSourceFile                            -> if attributeType `elem` parseable
-                                                              then parseParseableAttribute attributeType byteInfo
+                                                              then parseParseableAttribute constPool attributeType byteInfo
                                                               else AISourceFile byteInfo
                 ATSourceDebugExtension                  -> if attributeType `elem` parseable
-                                                              then parseParseableAttribute attributeType byteInfo
+                                                              then parseParseableAttribute constPool attributeType byteInfo
                                                               else AISourceDebugExtension byteInfo
                 ATLineNumberTable                       -> if attributeType `elem` parseable
-                                                              then parseParseableAttribute attributeType byteInfo
+                                                              then parseParseableAttribute constPool attributeType byteInfo
                                                               else AILineNumberTable byteInfo
                 ATLocalVariableTable                    -> if attributeType `elem` parseable
-                                                              then parseParseableAttribute attributeType byteInfo
+                                                              then parseParseableAttribute constPool attributeType byteInfo
                                                               else AILocalVariableTable byteInfo
                 ATLocalVariableTypeTable                -> if attributeType `elem` parseable
-                                                              then parseParseableAttribute attributeType byteInfo
+                                                              then parseParseableAttribute constPool attributeType byteInfo
                                                               else AILocalVariableTypeTable byteInfo
                 ATDeprecated                            -> if attributeType `elem` parseable
-                                                              then parseParseableAttribute attributeType byteInfo
+                                                              then parseParseableAttribute constPool attributeType byteInfo
                                                               else AIDeprecated byteInfo
                 ATRuntimeVisibleAnnotations             -> if attributeType `elem` parseable
-                                                              then parseParseableAttribute attributeType byteInfo
+                                                              then parseParseableAttribute constPool attributeType byteInfo
                                                               else AIRuntimeVisibleAnnotations byteInfo
                 ATRuntimeInvisibleAnnotations           -> if attributeType `elem` parseable
-                                                              then parseParseableAttribute attributeType byteInfo
+                                                              then parseParseableAttribute constPool attributeType byteInfo
                                                               else AIRuntimeInvisibleAnnotations byteInfo
                 ATRuntimeVisibleParameterAnnotations    -> if attributeType `elem` parseable 
-                                                              then parseParseableAttribute attributeType byteInfo
+                                                              then parseParseableAttribute constPool attributeType byteInfo
                                                               else AIRuntimeVisibleParameterAnnotations byteInfo
                 ATRuntimeInvisibleParameterAnnotations  -> if attributeType `elem` parseable
-                                                              then parseParseableAttribute attributeType byteInfo
+                                                              then parseParseableAttribute constPool attributeType byteInfo
                                                               else AIRuntimeInvisibleParameterAnnotations byteInfo
                 ATRuntimeVisibleTypeAnnotations         -> if attributeType `elem` parseable
-                                                              then parseParseableAttribute attributeType byteInfo
+                                                              then parseParseableAttribute constPool attributeType byteInfo
                                                               else AIRuntimeVisibleTypeAnnotations byteInfo
                 ATRuntimeInvisibleTypeAnnotations       -> if attributeType `elem` parseable
-                                                              then parseParseableAttribute attributeType byteInfo
+                                                              then parseParseableAttribute constPool attributeType byteInfo
                                                               else AIRuntimeInvisibleTypeAnnotations byteInfo
                 ATAnnotationDefault                     -> if attributeType `elem` parseable
-                                                              then parseParseableAttribute attributeType byteInfo
+                                                              then parseParseableAttribute constPool attributeType byteInfo
                                                               else AIAnnotationDefault byteInfo
                 ATBootstrapMethods                      -> if attributeType `elem` parseable
-                                                              then parseParseableAttribute attributeType byteInfo
+                                                              then parseParseableAttribute constPool attributeType byteInfo
                                                               else AIBootstrapMethods byteInfo
                 ATMethodParameters                      -> if attributeType `elem` parseable
-                                                              then parseParseableAttribute attributeType byteInfo
+                                                              then parseParseableAttribute constPool attributeType byteInfo
                                                               else AIMethodParameters byteInfo
 
 readAttribute :: [ConstantInfo] -> ExceptT Error Get AttributeInfo
@@ -287,14 +343,14 @@ readAttribute constPool = do
                 Right attrType          -> do 
                                                 attributeLength :: Int  <- pure fromIntegral <*> lift getWord32be
                                                 byteInfo <- getRawBytes attributeLength
-                                                return $ AttributeInfo attrType (parseAttribute attrType byteInfo)
+                                                return $ AttributeInfo attrType (parseAttribute constPool attrType byteInfo)
                                                 
 -- | Read a field
 readFieldInfo :: [ConstantInfo] -> ExceptT Error Get FieldInfo
 readFieldInfo pool = do
         accessFlags :: [AccessFlag]     <- pure toAccessFlags <*> lift getWord16be
-        name :: String                  <- pure (\x -> string.info $ pool !@ (x - 1)) <*> lift getWord16be
-        descriptor :: String            <- pure (\x -> string.info $ pool !@ (x - 1)) <*> lift getWord16be
+        name :: String                  <- pure (getStringFromConstPool pool) <*> lift getWord16be
+        descriptor :: String            <- pure (getStringFromConstPool pool) <*> lift getWord16be
         attributeCount :: Int           <- pure fromIntegral <*> lift getWord16be
         attributes :: [AttributeInfo]   <- replicateM attributeCount (readAttribute pool) 
         return $ FieldInfo accessFlags name descriptor attributes        
@@ -310,11 +366,11 @@ readFields pool = do
 readMethodInfo :: [ConstantInfo] -> ExceptT Error Get MethodInfo
 readMethodInfo pool = do
         accessFlags :: [AccessFlag]     <- pure toAccessFlags <*> lift getWord16be
-        name :: String                  <- pure (\x -> string.info $ pool !@ (x - 1)) <*> lift getWord16be
-        descriptor :: String            <- pure (\x -> string.info $ pool !@ (x - 1)) <*> lift getWord16be
+        name :: String                  <- pure (getStringFromConstPool pool) <*> lift getWord16be
+        descriptor :: String            <- pure (getStringFromConstPool pool) <*> lift getWord16be
         attributeCount :: Int           <- pure fromIntegral <*> lift getWord16be
         attributes :: [AttributeInfo]   <- replicateM attributeCount (readAttribute pool) 
-        return $ MethodInfo accessFlags name descriptor attributes 
+        trace ("Method: "++name++" AttributeC: "++show attributeCount) $ return $ MethodInfo accessFlags name (descriptorIndices descriptor) descriptor attributes 
 
 -- | Read the methods from the bytecode
 readMethods :: [ConstantInfo] -> ExceptT Error Get [MethodInfo]
