@@ -330,7 +330,7 @@ data AInfo =
                         maxStack                :: Int,
                         maxLocals               :: Int,
                         codeLength              :: Int,
-                        code                    :: [Word8]
+                        code                    :: [[Word8]]    -- contains opcodes paired with their arguments
                 } |
         AIStackMapTable 
                 {

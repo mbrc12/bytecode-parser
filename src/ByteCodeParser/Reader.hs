@@ -32,6 +32,9 @@ import ByteCodeParser.BasicTypes (
         FieldInfo(..), MethodInfo(..),
         MethodParameter(..))
 
+import ByteCodeParser.Instructions (
+        readInstructions)
+
 -- | Gives the Lazy ByteString stream of the input from the class file
 getClassFileStream :: ClassName                 -- ^ The input class
                    -> IO BL.ByteString          -- ^ The output bytestring stream, wrapped in IO
@@ -230,7 +233,7 @@ codeParser = do
         maxLocals :: Int        <- pure fromIntegral <*> getWord16be
         codeLength :: Int       <- pure fromIntegral <*> getWord32be
         code :: [Word8]         <- replicateM codeLength getWord8
-        return $ AIParsedCode maxStack maxLocals codeLength code
+        return $ AIParsedCode maxStack maxLocals codeLength (runGet readInstructions (BL.pack code))
 
 getStringFromConstPool constPool x = (string.info) $ constPool !@ (x - 1)
 
