@@ -12,10 +12,10 @@ import Data.Binary.Get
 import qualified Data.ByteString.Lazy as BL
 import Control.Monad 
 import ByteCodeParser.BasicTypes (
-        CInfo) 
+        CInfo, CodeAtom) 
 
 
-readInstructions :: Get [(Int, [Word8])]
+readInstructions :: Get [CodeAtom]
 readInstructions = readInstructionsIntoWords 0
 
 -- | Given current position returns how many to read to go to a multiple of 4
@@ -29,7 +29,7 @@ convertToInt xs = sum $ map (\(x, y) -> x * y) $ zip [2^24, 2^16, 2^8, 1] $ map 
 
 -- | Given a bytestring, this reads the instructions and organizes them, so that each element consists of
 -- | its opcode and the arguments passes to it. Assumed valid bytecode, so no error
-readInstructionsIntoWords :: Int -> Get [(Int, [Word8])] 
+readInstructionsIntoWords :: Int -> Get [CodeAtom] 
 readInstructionsIntoWords pos = do
         empty <- isEmpty
         if empty
@@ -39,7 +39,7 @@ readInstructionsIntoWords pos = do
                    others <- readInstructionsIntoWords pos'
                    return (instruction : others)
 
-readInstruction :: Int -> Get ((Int, [Word8]), Int) 
+readInstruction :: Int -> Get (CodeAtom, Int) 
 readInstruction pos = do
         opcode <- getWord8
         let howManyMore = consumeBytes opcode

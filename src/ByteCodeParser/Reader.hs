@@ -30,7 +30,7 @@ import ByteCodeParser.BasicTypes (
         AInfo(..), AttributeInfo(..),
         toAttributeType, parseable,
         FieldInfo(..), MethodInfo(..),
-        MethodParameter(..))
+        MethodParameter(..), CodeAtom)
 
 import ByteCodeParser.Instructions (
         readInstructions)

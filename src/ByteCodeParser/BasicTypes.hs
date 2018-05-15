@@ -25,7 +25,8 @@ module ByteCodeParser.BasicTypes (
         parseable,
         FieldInfo(..),
         MethodInfo(..),
-        MethodParameter(..)
+        MethodParameter(..),
+        CodeAtom
 ) where
 
 import System.IO (FilePath)
@@ -48,6 +49,7 @@ classFileExtension = ".class"
 
 -- | ClassName stands for just the name of the class.
 type ClassName = String
+type CodeAtom  = (Int, [Word8])
 
 -- | Produces the file path of the class from the ClassName
 getClassFilePath :: ClassName -> FilePath
@@ -330,7 +332,7 @@ data AInfo =
                         maxStack                :: Int,
                         maxLocals               :: Int,
                         codeLength              :: Int,
-                        code                    :: [(Int, [Word8])]    -- contains opcodes paired with their arguments
+                        code                    :: [CodeAtom]    -- contains opcodes paired with their arguments
                 } |
         AIStackMapTable 
                 {
