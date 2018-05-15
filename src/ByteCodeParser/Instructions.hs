@@ -1,7 +1,8 @@
 {-# LANGUAGE OverloadedStrings, DuplicateRecordFields #-}
 
 module ByteCodeParser.Instructions (
-        readInstructions
+        readInstructions,
+        convertToInt
 ) where
 
 import Data.Word (Word8, Word16, Word32)
@@ -14,7 +15,7 @@ import ByteCodeParser.BasicTypes (
         CInfo) 
 
 
-readInstructions :: Get [[Word8]]
+readInstructions :: Get [(Int, [Word8])]
 readInstructions = readInstructionsIntoWords 0
 
 -- | Given current position returns how many to read to go to a multiple of 4
@@ -28,7 +29,7 @@ convertToInt xs = sum $ map (\(x, y) -> x * y) $ zip [2^24, 2^16, 2^8, 1] $ map 
 
 -- | Given a bytestring, this reads the instructions and organizes them, so that each element consists of
 -- | its opcode and the arguments passes to it. Assumed valid bytecode, so no error
-readInstructionsIntoWords :: Int -> Get [[Word8]] 
+readInstructionsIntoWords :: Int -> Get [(Int, [Word8])] 
 readInstructionsIntoWords pos = do
         empty <- isEmpty
         if empty
@@ -38,7 +39,7 @@ readInstructionsIntoWords pos = do
                    others <- readInstructionsIntoWords pos'
                    return (instruction : others)
 
-readInstruction :: Int -> Get ([Word8], Int) 
+readInstruction :: Int -> Get ((Int, [Word8]), Int) 
 readInstruction pos = do
         opcode <- getWord8
         let howManyMore = consumeBytes opcode
@@ -49,13 +50,13 @@ readInstruction pos = do
                                                 if op == 132    -- iinc
                                                         then do
                                                                 others <- replicateM 4 getWord8
-                                                                return ([opcode, op] ++ others, pos + 6)
+                                                                return ((pos, [opcode, op] ++ others), pos + 6)
                                                         else do
                                                                 others <- replicateM 2 getWord8
-                                                                return ([opcode, op] ++ others, pos + 4)
+                                                                return ((pos, [opcode, op] ++ others), pos + 4)
                         170             -> do                                   -- tableswitch
                                                 let padding = toFour pos
-                                                replicateM_ padding getWord8
+                                                pad <- replicateM_ padding getWord8
                                                 [d1, d2, d3, d4] <- replicateM 4 getWord8
                                                 [l1, l2, l3, l4] <- replicateM 4 getWord8
                                                 [h1, h2, h3, h4] <- replicateM 4 getWord8
@@ -63,19 +64,20 @@ readInstruction pos = do
                                                     high = convertToInt [h1, h2, h3, h4]
                                                     toRead = (high - low + 1) * 4
                                                 manyMore <- replicateM toRead getWord8
-                                                return ([opcode, d1, d2, d3, d4, l1, l2, l3, l4, h1, h2, h3, h4] ++ manyMore, pos + padding + 12 + toRead)
+                                                return ((pos, [opcode, d1, d2, d3, d4, l1, l2, l3, l4, h1, h2, h3, h4] ++ manyMore), pos + 1 + padding + 12 + toRead)
                         171             -> do                                   -- lookupswitch
                                                 let padding = toFour pos
+                                                 
                                                 replicateM_ padding getWord8
                                                 [d1, d2, d3, d4] <- replicateM 4 getWord8
                                                 [n1, n2, n3, n4] <- replicateM 4 getWord8
                                                 let nPairs = convertToInt [n1, n2, n3, n4]
-                                                    toRead = nPairs * 4
+                                                    toRead = nPairs * 4 * 2
                                                 manyMore <- replicateM toRead getWord8
-                                                return ([opcode, d1, d2, d3, d4, n1, n2, n3, n4] ++ manyMore, pos + padding + 8 + toRead)
+                                                return ((pos, [opcode, d1, d2, d3, d4, n1, n2, n3, n4] ++ manyMore), pos + 1 + padding + 8 + toRead)
                 else do
                         bytes <- replicateM howManyMore getWord8
-                        return (opcode : bytes, pos + 1 + howManyMore)
+                        return ((pos, opcode : bytes), pos + 1 + howManyMore)
                         
                 
 -- | assumes verified bytecodes, so no error
