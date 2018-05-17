@@ -2,7 +2,19 @@
 
 module ByteCodeParser.Instructions (
         readInstructions,
-        convertToInt
+        opIfs,
+        opIfNonNull,
+        opIfNull,
+        opLookupSwitch,
+        opTableSwitch,
+        opGoto,
+        opGotoW,
+        opReturns,
+        opAConstNull,
+        opGetField,
+        opPutField,
+        opGetStatic,
+        opPutStatic
 ) where
 
 import Data.Word (Word8, Word16, Word32)
@@ -14,7 +26,23 @@ import Control.Monad
 import ByteCodeParser.BasicTypes (
         CInfo, CodeAtom) 
 
+opPutField, opIfNonNull, opIfNull, opLookupSwitch, opTableSwitch, opGoto, opGotoW, opAConstNull, opGetField, opGetStatic :: Word8
+opIfs, opReturns :: [Word8]
 
+opAConstNull = 1
+opIfs = [165, 166, 159, 160, 161, 162, 163, 164, 153, 154, 155, 156, 157, 158, 199]
+opIfNonNull = 199
+opIfNull = 198
+opLookupSwitch = 171
+opTableSwitch = 170
+opGoto = 167
+opGotoW = 200
+opGetField = 180
+opPutField = 181
+opGetStatic = 178
+opPutStatic = 179
+opReturns = [176, 175, 174, 172, 173, 169, 177]  
+ 
 readInstructions :: Get [CodeAtom]
 readInstructions = readInstructionsIntoWords 0
 
