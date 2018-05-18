@@ -410,5 +410,5 @@ readRawClassFile :: ClassName
                  -> IO (Either Error RawClassFile)
 readRawClassFile className = do
         classFileStream <- getClassFileStream className
-        return $ runGet (runExceptT reader) classFileStream
+        return $ runGet (runExceptT reader) $! classFileStream
 
