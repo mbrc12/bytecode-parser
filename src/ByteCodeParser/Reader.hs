@@ -6,7 +6,7 @@ module ByteCodeParser.Reader (
 
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
-import Debug.Trace(trace)
+--import Debug.Trace(trace)
 import Data.Binary
 import Data.Binary.Get (Get, runGet, getWord8, getWord16be, getWord32be)
 import System.IO (FilePath, Handle, IOMode, withFile, hGetContents)
@@ -374,7 +374,7 @@ readMethodInfo pool = do
         descriptor :: String            <- pure (getStringFromConstPool pool) <*> lift getWord16be
         attributeCount :: Int           <- pure fromIntegral <*> lift getWord16be
         attributes :: [AttributeInfo]   <- replicateM attributeCount (readAttribute pool) 
-        trace ("Method: "++name++" AttributeC: "++show attributeCount) $ return $ MethodInfo accessFlags name (descriptorIndices descriptor) descriptor attributes 
+        return $ MethodInfo accessFlags name (descriptorIndices descriptor) descriptor attributes 
 
 -- | Read the methods from the bytecode
 readMethods :: [ConstantInfo] -> ExceptT Error Get [MethodInfo]

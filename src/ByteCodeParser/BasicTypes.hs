@@ -138,7 +138,7 @@ toConstType value = case value of
                         1               -> Right CUtf8
                         15              -> Right CMethodHandle
                         16              -> Right CMethodType
-                        17              -> Right CInvokeDynamic
+                        18              -> Right CInvokeDynamic
                         _               -> Left $ produceError $ "Invalid Constant Type value " ++ show value
 
 -- Constant Info structure
