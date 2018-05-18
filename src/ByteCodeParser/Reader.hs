@@ -406,10 +406,16 @@ reader = do
                                 fields
                                 methods
 
+
+infoAboutClass :: ClassName -> Either Error RawClassFile -> Either Error RawClassFile
+infoAboutClass path (Left error) = Left ("In class: " ++ path ++ ", " ++ error)
+infoAboutClass _    (Right x)    = Right x
+
 -- | Reads the class file and forms a parsed RawClassFile structure
 readRawClassFile :: ClassName
                  -> IO (Either Error RawClassFile)
 readRawClassFile className = do
         classFileStream <- getClassFileStream className
-        return $ runGet (runExceptT reader)  classFileStream
+        let result = runGet (runExceptT reader) classFileStream
+        return $ infoAboutClass className result
 
