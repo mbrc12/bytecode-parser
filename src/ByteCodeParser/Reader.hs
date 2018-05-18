@@ -4,6 +4,7 @@ module ByteCodeParser.Reader (
         readRawClassFile
 ) where
 
+import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
 import Debug.Trace(trace)
 import Data.Binary
@@ -39,7 +40,7 @@ import ByteCodeParser.Instructions (
 getClassFileStream :: ClassName                 -- ^ The input class
                    -> IO BL.ByteString          -- ^ The output bytestring stream, wrapped in IO
 getClassFileStream className = 
-        BL.readFile classFilePath
+        pure BL.fromStrict <*> B.readFile classFilePath -- strict reading
         where classFilePath = getClassFilePath className
 
 getRawBytes :: Int -> ExceptT Error Get [Word8]
@@ -410,5 +411,5 @@ readRawClassFile :: ClassName
                  -> IO (Either Error RawClassFile)
 readRawClassFile className = do
         classFileStream <- getClassFileStream className
-        return $ runGet (runExceptT reader) $! classFileStream
+        return $ runGet (runExceptT reader)  classFileStream
 
