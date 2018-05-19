@@ -57,16 +57,16 @@ getClassFilePath = (++ classFileExtension)
 
  -- | The data of a raw class file, without any parsing. The bytecode is just represented almost as is in this.
 data RawClassFile = RawClassFile {
-        magicNumber     :: Word32,              -- must equal 'mAGIC' for 
-        minorVersion    :: Word16,              -- minor version of .class format
-        majorVersion    :: MajorVersion,        -- major version of .class format
-        constantPool    :: [ConstantInfo],      -- Constant Pool
-        accessFlags     :: [AccessFlag],       -- Access Flags
-        thisClass       :: String,              -- Name of this class
-        superClass      :: Maybe String,         -- Name of superclass if any
-        interfaces      :: [Word16],
-        fields          :: [FieldInfo],         -- fields                         
-        methods         :: [MethodInfo]         -- methods
+        magicNumber     :: !Word32,              -- must equal 'mAGIC' for 
+        minorVersion    :: !Word16,              -- minor version of .class format
+        majorVersion    :: !MajorVersion,        -- major version of .class format
+        constantPool    :: ![ConstantInfo],      -- Constant Pool
+        accessFlags     :: ![AccessFlag],       -- Access Flags
+        thisClass       :: !String,              -- Name of this class
+        superClass      :: !(Maybe String),         -- Name of superclass if any
+        interfaces      :: ![Word16],
+        fields          :: ![FieldInfo],         -- fields                         
+        methods         :: ![MethodInfo]         -- methods
         } deriving Show
 
 -- | Error is used to indicate an error in the form of a string.
@@ -143,26 +143,26 @@ toConstType value = case value of
 
 -- Constant Info structure
 data CInfo = 
-                CClassI                 { nameIndex :: Word16 }                                                 |
-                CFieldRefI              { classIndex :: Word16, nameAndTypeIndex :: Word16 }                    |
-                CMethodRefI             { classIndex :: Word16, nameAndTypeIndex :: Word16 }                    |
-                CInterfaceMethodRefI    { classIndex :: Word16, nameAndTypeIndex :: Word16 }                    |
-                CStringI                { stringIndex :: Word16 }                                               |              
-                CIntegerI               { bytei :: Word32 }                                                     |
-                CFloatI                 { bytef :: Word32 }                                                     |
-                CLongI                  { high  :: Word32, low :: Word32 }                                      |
-                CDoubleI                { high  :: Word32, low :: Word32 }                                      |
-                CNameAndTypeI           { nameIndex :: Word16, descriptorIndex :: Word16 }                      |
-                CUtf8I                  { len :: Word16, string:: String }                                      |
-                CMethodHandleI          { referenceKind :: ReferenceKind, referenceIndex :: Word16 }            |
-                CMethodTypeI            { descriptorIndex :: Word16 }                                           |
-                CInvokeDynamicI         { bootstrapMethodAttrIndex :: Word16, nameAndTypeIndex :: Word16 }
+                CClassI                 { nameIndex :: !Word16 }                                                |
+                CFieldRefI              { classIndex :: !Word16, nameAndTypeIndex :: !Word16 }                  |
+                CMethodRefI             { classIndex :: !Word16, nameAndTypeIndex :: !Word16 }                  |
+                CInterfaceMethodRefI    { classIndex :: !Word16, nameAndTypeIndex :: !Word16 }                  |
+                CStringI                { stringIndex :: !Word16 }                                              |              
+                CIntegerI               { bytei :: !Word32 }                                                    |
+                CFloatI                 { bytef :: !Word32 }                                                    |
+                CLongI                  { high  :: !Word32, low :: !Word32 }                                    |
+                CDoubleI                { high  :: !Word32, low :: !Word32 }                                    |
+                CNameAndTypeI           { nameIndex :: !Word16, descriptorIndex :: !Word16 }                    |
+                CUtf8I                  { len :: !Word16, string:: !String }                                    |
+                CMethodHandleI          { referenceKind :: !ReferenceKind, referenceIndex :: !Word16 }          |
+                CMethodTypeI            { descriptorIndex :: !Word16 }                                          |
+                CInvokeDynamicI         { bootstrapMethodAttrIndex :: !Word16, nameAndTypeIndex :: !Word16 }
                 deriving Show
 
 -- Constant Pool Info Structure
 data ConstantInfo = ConstantInfo {
-                        constType       :: ConstType,
-                        info            :: CInfo
+                        constType       :: !ConstType,
+                        info            :: !CInfo
                                  } deriving Show
 
 -- Reference Kind for method handles, see 'CMethodHandleI'
@@ -291,8 +291,8 @@ data ParameterAnnotations = ParameterAnnotations {
 
 -- | See 'AIMethodParameters
 data MethodParameter = MethodParameter {
-                                name            :: String,
-                                accessFlags     :: [AccessFlag]
+                                name            :: !String,
+                                accessFlags     :: ![AccessFlag]
                         } deriving Show
 
 
@@ -315,12 +315,12 @@ data MethodParameter = MethodParameter {
 data AInfo = 
         AIConstantValue 
                 {      
-                        bytes                   :: [Word8]
+                        bytes                   :: ![Word8]
                         -- constantValueIndex      :: Word16
                 } |
         AICode 
                 {      
-                        bytes                   :: [Word8]
+                        bytes                   :: ![Word8]
                         --maxStack                :: Word16,
                         --maxLocals               :: Word16,
                         --code                    :: [Instruction],               -- not defined yet
@@ -329,25 +329,25 @@ data AInfo =
                 } |
         AIParsedCode 
                 {
-                        maxStack                :: Int,
-                        maxLocals               :: Int,
-                        codeLength              :: Int,
-                        code                    :: [CodeAtom]    -- contains opcodes paired with their arguments
+                        maxStack                :: !Int,
+                        maxLocals               :: !Int,
+                        codeLength              :: !Int,
+                        code                    :: ![CodeAtom]    -- contains opcodes paired with their arguments
                 } |
         AIStackMapTable 
                 {
-                        bytes                   :: [Word8]
+                        bytes                   :: ![Word8]
                         --entries                 :: [StackMapFrameEntry]         -- not defined yet
                 } |
 
         AIExceptions 
                 {
-                        bytes                   :: [Word8]
+                        bytes                   :: ![Word8]
                         --exceptionIndexTable     :: [Word16] 
                 } |
         AIInnerClasses
                 {
-                        bytes                   :: [Word8]
+                        bytes                   :: ![Word8]
                         --innerClassInfoIndex     :: Word16,
                         --outerClassInfoIndex     :: Word16,
                         --innerNameIndex          :: Word16,
@@ -355,95 +355,95 @@ data AInfo =
                 } |
         AIEnclosingSingleMethod
                 {
-                        bytes                   :: [Word8]
+                        bytes                   :: ![Word8]
                         --classIndex              :: Word16,
                         --methodIndex             :: Word16
                 } |
         AISynthetic 
                 {
-                        bytes                   :: [Word8]
+                        bytes                   :: ![Word8]
                 } |
         AISignature
                 {
-                        bytes                   :: [Word8]
+                        bytes                   :: ![Word8]
                         --signatureIndex          :: Word16
                 } |
         AISourceFile
                 {
-                        bytes                   :: [Word8]
+                        bytes                   :: ![Word8]
                         --sourceFileIndex         :: Word16
                 } |
         AISourceDebugExtension
                 {
-                        bytes                   :: [Word8]
+                        bytes                   :: ![Word8]
                         --debugExtension          :: [Word8]
                 } |
         AILineNumberTable
                 {
-                        bytes                   :: [Word8]
+                        bytes                   :: ![Word8]
                         --lineNumberTable         :: [LineNumberTableEntry]
                 } |
         AILocalVariableTable
                 {
-                        bytes                   :: [Word8]
+                        bytes                   :: ![Word8]
                         --localVariableTable      :: [LocalVariableTableEntry]
                 } |
         AILocalVariableTypeTable
                 {
-                        bytes                   :: [Word8]
+                        bytes                   :: ![Word8]
                         --localVariableTypeTable  :: [LocalVariableTypeTableEntry]
                 } |
         AIDeprecated 
                 {
-                        bytes                   :: [Word8]
+                        bytes                   :: ![Word8]
                 } |
         AIRuntimeVisibleAnnotations
                 {
-                        bytes                   :: [Word8]
+                        bytes                   :: ![Word8]
                         --annotations             :: [Annotation]                 -- not defined yet
                 } |
         AIRuntimeInvisibleAnnotations 
                 {
-                        bytes                   :: [Word8]
+                        bytes                   :: ![Word8]
                         --annotations             :: [Annotation]
                 } |
         AIRuntimeVisibleParameterAnnotations 
                 {
-                        bytes                   :: [Word8]
+                        bytes                   :: ![Word8]
                         --parameterAnnotations    :: [ParameterAnnotations]
                 } |
         AIRuntimeInvisibleParameterAnnotations 
                 {
-                        bytes                   :: [Word8]
+                        bytes                   :: ![Word8]
                         --parameterAnnotations    :: [ParameterAnnotations]
                 } |
         AIRuntimeVisibleTypeAnnotations 
                 {
-                        bytes                   :: [Word8]
+                        bytes                   :: ![Word8]
                         --annotations             :: [TypeAnnotation]             -- not defined yet
                 } |
         AIRuntimeInvisibleTypeAnnotations 
                 {
-                        bytes                   :: [Word8]
+                        bytes                   :: ![Word8]
                         --annotations             :: [TypeAnnotation]
                 } |
         AIAnnotationDefault                     
                 {
-                        bytes                   :: [Word8]                      
+                        bytes                   :: ![Word8]                      
                 } |
         AIBootstrapMethods
                 {
-                        bytes                   :: [Word8]
+                        bytes                   :: ![Word8]
                         --bootstrapMethods        :: [BootstrapMethod]
                 } |
         AIMethodParameters 
                 {
-                        bytes                   :: [Word8]
+                        bytes                   :: ![Word8]
                         --parameters              :: [MethodParameter]
                 } |
         AIParsedMethodParameters 
                 {
-                        parameters              :: [MethodParameter]
+                        parameters              :: ![MethodParameter]
                 } |
         AIDummy
                         -- added just for `parseParseableAttribute' in Reader.hs
@@ -462,8 +462,8 @@ parseable = [ATCode, ATMethodParameters]
 
 -- Attribute Info structure containing an AttributeType, and AInfo
 data AttributeInfo = AttributeInfo {
-                        attributeType :: AttributeType,
-                        attributeInfo :: AInfo
+                        attributeType :: !AttributeType,
+                        attributeInfo :: !AInfo
                 } deriving Show
 
 
@@ -495,17 +495,17 @@ toAttributeType s = case s of
 
 -- | Field Info structure
 data FieldInfo = FieldInfo {
-                        accessFlags     :: [AccessFlag],
-                        name            :: String,
-                        descriptor      :: String,
-                        attributes      :: [AttributeInfo]
+                        accessFlags     :: ![AccessFlag],
+                        name            :: !String,
+                        descriptor      :: !String,
+                        attributes      :: ![AttributeInfo]
                 } deriving Show
 
 
 data MethodInfo = MethodInfo {
-                        accessFlags     :: [AccessFlag],
-                        name            :: String,
-                        descriptor      :: [(Int, Bool)],       -- see comments on 'descriptorIndices' in Reader.hs for info on what these values mean
-                        descriptorString:: String,
-                        attributes      :: [AttributeInfo]
+                        accessFlags     :: ![AccessFlag],
+                        name            :: !String,
+                        descriptor      :: ![(Int, Bool)],       -- see comments on 'descriptorIndices' in Reader.hs for info on what these values mean
+                        descriptorString:: !String,
+                        attributes      :: ![AttributeInfo]
                 } deriving Show
