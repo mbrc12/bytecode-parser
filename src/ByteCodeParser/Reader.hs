@@ -18,7 +18,7 @@ import Control.Applicative (pure, (<*>))
 import Control.Monad.Trans.Except (ExceptT, runExceptT, except, throwE)
 import Control.Monad.Trans.Class  (lift)
 import ByteCodeParser.BasicTypes (
-        (!@),
+        (!@), computeThenReturn,
         mAGIC, ClassName, 
         getClassFilePath, RawClassFile(..), 
         Error, produceError,
@@ -163,7 +163,7 @@ readConstFromPool = do
                                                 nameAndTypeIndex <- lift getWord16be
                                                 return $ CInvokeDynamicI (bootstrapMethodAttrIndex - 1) (nameAndTypeIndex - 1)
 
-        return (ConstantInfo constType cinfo, if constType == CLong || constType == CDouble then 2 else 1)
+        computeThenReturn (ConstantInfo constType cinfo, if constType == CLong || constType == CDouble then 2 else 1)
         
         where
                 -- | getBytes gets len bytes from the input
@@ -188,25 +188,27 @@ readConstantPool = do
                 readPool rem = if rem == 0 
                                   then return []
                                   else do 
-                                          (c_elem, c_positions) <- readConstFromPool
-                                          if c_positions == 1 
-                                             then pure (c_elem :) <*> readPool (rem - c_positions)
-                                             else pure ([c_elem, c_elem] ++) <*> readPool (rem - c_positions)
+                                                (c_elem, c_positions) <- readConstFromPool
+                                                q <- if c_positions == 1 
+                                                        then pure (c_elem :) <*> readPool (rem - c_positions)
+                                                        else pure ([c_elem, c_elem] ++) <*> readPool (rem - c_positions)
+                                                computeThenReturn q
+                                        
                                                                 
 
 -- | Reads the access flags
 readAccessFlags :: ExceptT Error Get [AccessFlag]
 readAccessFlags = do
         flags <- lift getWord16be
-        return $ toAccessFlags flags
+        return $! toAccessFlags flags
 
 
 -- | Get the name of this class
 readThisClass :: [ConstantInfo] -> ExceptT Error Get String
 readThisClass constPool = do
         index <- lift getWord16be
-        let classNameIndex = nameIndex.info $ constPool!@(index - 1)
-            className = string.info $ constPool!@classNameIndex
+        let classNameIndex = nameIndex.info $! constPool!@(index - 1)
+            className = string.info $! constPool!@classNameIndex
         return className
 
 -- | Get the name of the super class
@@ -234,7 +236,7 @@ codeParser = do
         maxLocals :: Int        <- pure fromIntegral <*> getWord16be
         codeLength :: Int       <- pure fromIntegral <*> getWord32be
         code :: [Word8]         <- replicateM codeLength getWord8
-        return $ AIParsedCode maxStack maxLocals codeLength (runGet readInstructions (BL.pack code))
+        return $! AIParsedCode maxStack maxLocals codeLength (runGet readInstructions (BL.pack code))
 
 getStringFromConstPool constPool x = (string.info) $ constPool !@ (x - 1)
 
@@ -242,14 +244,14 @@ readParameter :: [ConstantInfo] -> Get MethodParameter
 readParameter constPool = do
         name :: String <- pure (getStringFromConstPool constPool) <*> getWord16be
         accessFlags    <- pure toAccessFlags <*> getWord16be
-        return $ MethodParameter name accessFlags
+        return $! MethodParameter name accessFlags
 
 methodParametersParser :: [ConstantInfo] -> Get AInfo
 -- returns the parsed methodParameters
 methodParametersParser constPool = do
         paramCount :: Int               <- pure fromIntegral <*> getWord8
         params     :: [MethodParameter] <- replicateM paramCount (readParameter constPool)
-        return $ AIParsedMethodParameters params
+        return $! AIParsedMethodParameters params
 
 -- | Parse attributes for which there are special methods
 parseParseableAttribute :: [ConstantInfo] -> AttributeType -> [Word8] -> AInfo
@@ -347,7 +349,7 @@ readAttribute constPool = do
                 Right attrType          -> do 
                                                 attributeLength :: Int  <- pure fromIntegral <*> lift getWord32be
                                                 byteInfo <- getRawBytes attributeLength
-                                                return $ AttributeInfo attrType (parseAttribute constPool attrType byteInfo)
+                                                computeThenReturn $ AttributeInfo attrType (parseAttribute constPool attrType byteInfo)
                                                 
 -- | Read a field
 readFieldInfo :: [ConstantInfo] -> ExceptT Error Get FieldInfo
@@ -357,7 +359,7 @@ readFieldInfo pool = do
         descriptor :: String            <- pure (getStringFromConstPool pool) <*> lift getWord16be
         attributeCount :: Int           <- pure fromIntegral <*> lift getWord16be
         attributes :: [AttributeInfo]   <- replicateM attributeCount (readAttribute pool) 
-        return $ FieldInfo accessFlags name descriptor attributes        
+        computeThenReturn $ FieldInfo accessFlags name descriptor attributes        
 
 -- | Reads the fields from the bytecode
 readFields :: [ConstantInfo] -> ExceptT Error Get [FieldInfo]
@@ -374,7 +376,7 @@ readMethodInfo pool = do
         descriptor :: String            <- pure (getStringFromConstPool pool) <*> lift getWord16be
         attributeCount :: Int           <- pure fromIntegral <*> lift getWord16be
         attributes :: [AttributeInfo]   <- replicateM attributeCount (readAttribute pool) 
-        return $ MethodInfo accessFlags name (descriptorIndices descriptor) descriptor attributes 
+        computeThenReturn $ MethodInfo accessFlags name (descriptorIndices descriptor) descriptor attributes 
 
 -- | Read the methods from the bytecode
 readMethods :: [ConstantInfo] -> ExceptT Error Get [MethodInfo]
@@ -394,7 +396,7 @@ reader = do
         interfaces      <- readInterfaces
         fields          <- readFields constPool
         methods         <- readMethods constPool
-        return $ 
+        computeThenReturn $ 
                 RawClassFile    magic 
                                 minor 
                                 major 
@@ -417,5 +419,5 @@ readRawClassFile :: ClassName
 readRawClassFile className = do
         classFileStream <- getClassFileStream className
         let result = runGet (runExceptT reader) classFileStream
-        return $ infoAboutClass className result
+        computeThenReturn $ infoAboutClass className result
 

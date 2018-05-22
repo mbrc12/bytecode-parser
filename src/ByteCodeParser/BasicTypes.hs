@@ -2,6 +2,7 @@
 
 module ByteCodeParser.BasicTypes (
         (!@),
+        computeThenReturn,
         mAGIC,
         ClassName,
         getClassFilePath,
@@ -39,6 +40,11 @@ import Data.List (zip, sort)
 -- | !! for [a] -> Word16
 (!@) :: [a] -> Word16 -> a
 (!@) xs pos = xs !! fromIntegral pos
+
+
+computeThenReturn :: (Monad m) => a -> m a
+computeThenReturn x = x `seq` (return x) 
+
 
 -- | The Java Class MAGIC number
 mAGIC :: Word32
