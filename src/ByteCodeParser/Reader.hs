@@ -1,7 +1,8 @@
 {-# LANGUAGE OverloadedStrings, DuplicateRecordFields, ScopedTypeVariables #-}
 
 module ByteCodeParser.Reader (
-        readRawClassFile
+        readRawClassFile,
+        descriptorIndices
 ) where
 
 import qualified Data.ByteString as B
