@@ -17,8 +17,14 @@ module ByteCodeParser.BasicTypes (
         ConstantInfo(..),
         ReferenceKind,
         toReferenceKind,
-        AccessFlag(..),
-        toAccessFlags,
+        MethodAccessFlag(..),
+        FieldAccessFlag(..),
+        ClassAccessFlag(..),
+        MethodParameterAccessFlag(..),
+        toMethodAccessFlags,
+        toFieldAccessFlags,
+        toClassAccessFlags,
+        toMethodParameterAccessFlags,
         AttributeType(..),
         AInfo(..),
         AttributeInfo(..),
@@ -67,7 +73,7 @@ data RawClassFile = RawClassFile {
         minorVersion    :: !Word16,              -- minor version of .class format
         majorVersion    :: !MajorVersion,        -- major version of .class format
         constantPool    :: ![ConstantInfo],      -- Constant Pool
-        accessFlags     :: ![AccessFlag],       -- Access Flags
+        accessFlags     :: ![ClassAccessFlag],       -- Access Flags
         thisClass       :: !String,              -- Name of this class
         superClass      :: !(Maybe String),         -- Name of superclass if any
         interfaces      :: ![Word16],
@@ -201,22 +207,81 @@ toReferenceKind value = case value of
                                 
 
 -- | Access Flags data structure
-data AccessFlag = 
-        APublic         |
-        AFinal          |
-        ASuper          |
-        AInterface      |
-        AAbstract       |
-        ASynthetic      |
-        AAnnotation     |
-        AEnum           
+data MethodAccessFlag = 
+        AMPublic         |
+        AMPrivate        |
+        AMProtected      |
+        AMStatic         |
+        AMFinal          |
+        AMSynchronized   |
+        AMBridge         |
+        AMVarargs        |
+        AMNative         |
+        AMAbstract       |
+        AMStrict         |
+        AMSynthetic      
         deriving (Show, Eq, Ord)
 
 -- | Convert Accessflag integer to [AccessFlag]
-toAccessFlags :: Word16 -> [AccessFlag]
-toAccessFlags flags = sort $ map (([APublic, AFinal, ASuper, AInterface, AAbstract, ASynthetic, AAnnotation, AEnum] !!).fst) $
+toMethodAccessFlags :: Word16 -> [MethodAccessFlag]
+toMethodAccessFlags flags = sort $ map (([AMPublic, AMPrivate, AMProtected, AMStatic, AMFinal, AMSynchronized, AMBridge, AMVarargs, AMNative, AMAbstract, AMStrict, AMSynthetic] !!).fst) $
                                 filter (\(_, bits) -> flags .&. bits /= 0) $
-                                        zip [0..] [0x0001, 0x0010, 0x0020, 0x0200, 0x0400, 0x1000, 0x2000, 0x4000]
+                                        zip [0..] $ 
+                                                [0x0001, 0x0002, 0x0004, 0x0008, 0x0010, 0x0020, 0x0040, 0x0080, 0x0100, 0x0400, 0x0800, 0x1000]
+
+
+data FieldAccessFlag = 
+        AFPublic         |
+        AFPrivate        |
+        AFProtected      |
+        AFStatic         |
+        AFFinal          |
+        AFVolatile       |
+        AFTransient      |
+        AFSynthetic      |
+        AFEnum           
+        deriving (Show, Eq, Ord)
+
+toFieldAccessFlags :: Word16 -> [FieldAccessFlag]
+toFieldAccessFlags flags = sort $ map (([AFPublic, AFPrivate, AFProtected, AFStatic, AFFinal, AFVolatile, AFTransient, AFSynthetic, AFEnum] !!).fst) $
+                                filter (\(_, bits) -> flags .&. bits /= 0) $
+                                        zip [0..] $ 
+                                                [0x0001, 0x0002, 0x0004, 0x0008, 0x0010, 0x0040, 0x0080, 0x1000, 0x4000]
+
+
+
+data ClassAccessFlag =
+        ACPublic         |
+        ACFinal          |
+        ACSuper          |
+        ACInterface      |
+        ACAbstract       |
+        ACSynthetic      |
+        ACAnnotation     |
+        ACEnum           
+        deriving (Show, Eq, Ord)
+
+toClassAccessFlags :: Word16 -> [ClassAccessFlag]
+toClassAccessFlags flags = sort $ map (([ACPublic, ACFinal, ACSuper, ACInterface, ACAbstract, ACSynthetic, ACAnnotation, ACEnum] !!).fst) $
+                                filter (\(_, bits) -> flags .&. bits /= 0) $
+                                        zip [0..] $ 
+                                                [0x0001, 0x0010, 0x0020, 0x0200, 0x0400, 0x1000, 0x2000, 0x4000]
+
+
+
+data MethodParameterAccessFlag = 
+        AMPFinal          |
+        AMPSynthetic      |
+        AMPMandated       
+        deriving (Show, Eq, Ord)
+
+
+toMethodParameterAccessFlags :: Word16 -> [MethodParameterAccessFlag]
+toMethodParameterAccessFlags flags = sort $ map (([AMPFinal, AMPSynthetic, AMPMandated] !!).fst) $
+                                filter (\(_, bits) -> flags .&. bits /= 0) $
+                                        zip [0..] $ 
+                                                [0x0010, 0x1000, 0x8000]
+
 
 
 -- | Attributes 
@@ -298,7 +363,7 @@ data ParameterAnnotations = ParameterAnnotations {
 -- | See 'AIMethodParameters
 data MethodParameter = MethodParameter {
                                 name            :: !String,
-                                accessFlags     :: ![AccessFlag]
+                                accessFlags     :: ![MethodParameterAccessFlag]
                         } deriving Show
 
 
@@ -501,7 +566,7 @@ toAttributeType s = case s of
 
 -- | Field Info structure
 data FieldInfo = FieldInfo {
-                        accessFlags     :: ![AccessFlag],
+                        accessFlags     :: ![FieldAccessFlag],
                         name            :: !String,
                         descriptor      :: !String,
                         attributes      :: ![AttributeInfo]
@@ -509,7 +574,7 @@ data FieldInfo = FieldInfo {
 
 
 data MethodInfo = MethodInfo {
-                        accessFlags     :: ![AccessFlag],
+                        accessFlags     :: ![MethodAccessFlag],
                         name            :: !String,
                         descriptor      :: ![(Int, Bool)],       -- see comments on 'descriptorIndices' in Reader.hs for info on what these values mean
                         descriptorString:: !String,

@@ -17,21 +17,7 @@ import Control.Monad (when, forM, replicateM)
 import Control.Applicative (pure, (<*>))
 import Control.Monad.Trans.Except (ExceptT, runExceptT, except, throwE)
 import Control.Monad.Trans.Class  (lift)
-import ByteCodeParser.BasicTypes (
-        (!@), computeThenReturn,
-        mAGIC, ClassName, 
-        getClassFilePath, RawClassFile(..), 
-        Error, produceError,
-        MajorVersion(..), toMajorVersion,
-        ConstType(..), toConstType, 
-        ConstantInfo(..), CInfo(..),
-        ReferenceKind(..), toReferenceKind,
-        AccessFlag(..), toAccessFlags,
-        parseable, AttributeType(..),
-        AInfo(..), AttributeInfo(..),
-        toAttributeType, parseable,
-        FieldInfo(..), MethodInfo(..),
-        MethodParameter(..), CodeAtom)
+import ByteCodeParser.BasicTypes 
 
 import ByteCodeParser.Instructions (
         readInstructions)
@@ -197,10 +183,10 @@ readConstantPool = do
                                                                 
 
 -- | Reads the access flags
-readAccessFlags :: ExceptT Error Get [AccessFlag]
+readAccessFlags :: ExceptT Error Get [ClassAccessFlag]
 readAccessFlags = do
         flags <- lift getWord16be
-        return $! toAccessFlags flags
+        return $! toClassAccessFlags flags
 
 
 -- | Get the name of this class
@@ -243,7 +229,7 @@ getStringFromConstPool constPool x = (string.info) $ constPool !@ (x - 1)
 readParameter :: [ConstantInfo] -> Get MethodParameter
 readParameter constPool = do
         name :: String <- pure (getStringFromConstPool constPool) <*> getWord16be
-        accessFlags    <- pure toAccessFlags <*> getWord16be
+        accessFlags    <- pure toMethodParameterAccessFlags <*> getWord16be
         return $! MethodParameter name accessFlags
 
 methodParametersParser :: [ConstantInfo] -> Get AInfo
@@ -354,7 +340,7 @@ readAttribute constPool = do
 -- | Read a field
 readFieldInfo :: [ConstantInfo] -> ExceptT Error Get FieldInfo
 readFieldInfo pool = do
-        accessFlags :: [AccessFlag]     <- pure toAccessFlags <*> lift getWord16be
+        accessFlags :: [FieldAccessFlag]<- pure toFieldAccessFlags <*> lift getWord16be
         name :: String                  <- pure (getStringFromConstPool pool) <*> lift getWord16be
         descriptor :: String            <- pure (getStringFromConstPool pool) <*> lift getWord16be
         attributeCount :: Int           <- pure fromIntegral <*> lift getWord16be
@@ -371,7 +357,7 @@ readFields pool = do
 -- | Read a method
 readMethodInfo :: [ConstantInfo] -> ExceptT Error Get MethodInfo
 readMethodInfo pool = do
-        accessFlags :: [AccessFlag]     <- pure toAccessFlags <*> lift getWord16be
+        accessFlags :: [MethodAccessFlag]<- pure toMethodAccessFlags <*> lift getWord16be
         name :: String                  <- pure (getStringFromConstPool pool) <*> lift getWord16be
         descriptor :: String            <- pure (getStringFromConstPool pool) <*> lift getWord16be
         attributeCount :: Int           <- pure fromIntegral <*> lift getWord16be
