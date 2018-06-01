@@ -60,6 +60,7 @@ arrayType       = '['
 
 -- | Given a method descriptor this function will return the positions in the local variable array which are of parameters, 
 -- | and if the indexed parameter is a reference (Object/Array), the second argument is true
+
 descriptorIndices :: String -> [(Int, Bool)]
 descriptorIndices descriptor = recursiveCalc desc2 1
                                 where
@@ -81,7 +82,6 @@ descriptorIndices descriptor = recursiveCalc desc2 1
                                                                                                else (x, True) : recursiveCalc (drop 1 arrTypeAnd) (x + 1)
                                                                                     else []
 
-                                                                         
 
 
 -- Read a Constant from the pool, see 'readConstantPool'
@@ -404,7 +404,10 @@ infoAboutClass _    (Right x)    = Right x
 readRawClassFile :: ClassName
                  -> IO (Either Error RawClassFile)
 readRawClassFile className = do
+        putStrLn $ "Reading " ++ className
         classFileStream <- getClassFileStream className
         let result = runGet (runExceptT reader) classFileStream
-        computeThenReturn $ infoAboutClass className result
+        putStrLn "Completed."
+        return $ infoAboutClass className result
+
 
