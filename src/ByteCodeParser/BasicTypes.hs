@@ -79,7 +79,7 @@ data RawClassFile = RawClassFile {
         interfaces      :: ![Word16],
         fields          :: ![FieldInfo],         -- fields                         
         methods         :: ![MethodInfo]         -- methods
-        } deriving Show
+        } deriving (Eq, Show)
 
 -- | Error is used to indicate an error in the form of a string.
 type Error = String 
@@ -169,13 +169,13 @@ data CInfo =
                 CMethodHandleI          { referenceKind :: !ReferenceKind, referenceIndex :: !Word16 }          |
                 CMethodTypeI            { descriptorIndex :: !Word16 }                                          |
                 CInvokeDynamicI         { bootstrapMethodAttrIndex :: !Word16, nameAndTypeIndex :: !Word16 }
-                deriving Show
+                deriving (Eq, Show)
 
 -- Constant Pool Info Structure
 data ConstantInfo = ConstantInfo {
                         constType       :: !ConstType,
                         info            :: !CInfo
-                                 } deriving Show
+                                 } deriving (Eq, Show)
 
 -- Reference Kind for method handles, see 'CMethodHandleI'
 data ReferenceKind = 
@@ -364,7 +364,7 @@ data ParameterAnnotations = ParameterAnnotations {
 data MethodParameter = MethodParameter {
                                 name            :: !String,
                                 accessFlags     :: ![MethodParameterAccessFlag]
-                        } deriving Show
+                        } deriving (Eq, Show)
 
 
 
@@ -518,7 +518,7 @@ data AInfo =
                 } |
         AIDummy
                         -- added just for `parseParseableAttribute' in Reader.hs
-        deriving Show        
+        deriving (Eq, Show)        
 
 {- TODO: The below list represents the structures which have a structure that 
     is better than the raw 'bytes' format, and must be parsed by a parser.
@@ -535,7 +535,7 @@ parseable = [ATCode, ATMethodParameters]
 data AttributeInfo = AttributeInfo {
                         attributeType :: !AttributeType,
                         attributeInfo :: !AInfo
-                } deriving Show
+                } deriving (Eq, Show)
 
 
 -- Converts String to represented Attribute Type
@@ -570,7 +570,7 @@ data FieldInfo = FieldInfo {
                         name            :: !String,
                         descriptor      :: !String,
                         attributes      :: ![AttributeInfo]
-                } deriving Show
+                } deriving (Eq, Show)
 
 
 data MethodInfo = MethodInfo {
@@ -579,4 +579,4 @@ data MethodInfo = MethodInfo {
                         descriptor      :: ![(Int, Bool)],       -- see comments on 'descriptorIndices' in Reader.hs for info on what these values mean
                         descriptorString:: !String,
                         attributes      :: ![AttributeInfo]
-                } deriving Show
+                } deriving (Eq, Show)
