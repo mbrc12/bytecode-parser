@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, DuplicateRecordFields #-}
+{-# LANGUAGE OverloadedStrings, DuplicateRecordFields, ScopedTypeVariables#-}
 
 module ByteCodeParser.Instructions (
         readInstructions,
@@ -16,7 +16,8 @@ module ByteCodeParser.Instructions (
         opGetStatic,
         opPutStatic
 ) where
-
+import Data.Int (Int32)
+import Debug.Trace (trace, traceM)
 import Data.Word (Word8, Word16, Word32)
 import Data.List (zip)
 import Data.Binary
@@ -52,8 +53,10 @@ toFour x = let p = x `rem` 4
             in 3 - p
 
 -- | Convert [x1, x2, x3, x4] -> x1 << 24 + x2 << 16 + x3 << 8 + x4
+-- | uses Int32 to get the effect of signed-ness.
 convertToInt :: [Word8] -> Int
-convertToInt xs = sum $ map (\(x, y) -> x * y) $ zip [2^24, 2^16, 2^8, 1] $ map fromIntegral xs
+convertToInt xs = let signedval :: Int32 = sum $ map (\(x, y) -> x * y) $ zip [2^24, 2^16, 2^8, 1] $ map fromIntegral xs
+                  in fromIntegral signedval
 
 -- | Given a bytestring, this reads the instructions and organizes them, so that each element consists of
 -- | its opcode and the arguments passes to it. Assumed valid bytecode, so no error
@@ -91,6 +94,8 @@ readInstruction pos = do
                                                 let low = convertToInt [l1, l2, l3, l4]
                                                     high = convertToInt [h1, h2, h3, h4]
                                                     toRead = (high - low + 1) * 4
+                                                --traceM $ "The low is : " ++ show low
+                                                --traceM $ "The high is : " ++ show high
                                                 manyMore <- replicateM toRead getWord8
                                                 return ((pos, [opcode, d1, d2, d3, d4, l1, l2, l3, l4, h1, h2, h3, h4] ++ manyMore), pos + 1 + padding + 12 + toRead)
                         171             -> do                                   -- lookupswitch

@@ -7,7 +7,7 @@ module ByteCodeParser.Reader (
 
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
---import Debug.Trace(trace)
+import Debug.Trace(trace, traceM)
 import Data.Binary
 import Data.Binary.Get (Get, runGet, getWord8, getWord16be, getWord32be)
 import System.IO (FilePath, Handle, IOMode, withFile, hGetContents)
@@ -18,7 +18,7 @@ import Control.Monad (when, forM, replicateM)
 import Control.Applicative (pure, (<*>))
 import Control.Monad.Trans.Except (ExceptT, runExceptT, except, throwE)
 import Control.Monad.Trans.Class  (lift)
-import ByteCodeParser.BasicTypes 
+import ByteCodeParser.BasicTypes
 
 import ByteCodeParser.Instructions (
         readInstructions)
@@ -223,6 +223,7 @@ codeParser = do
         maxLocals :: Int        <- pure fromIntegral <*> getWord16be
         codeLength :: Int       <- pure fromIntegral <*> getWord32be
         code :: [Word8]         <- replicateM codeLength getWord8
+        --traceM ("codeParser, it has code :: " ++ show code)
         return $! AIParsedCode maxStack maxLocals codeLength (runGet readInstructions (BL.pack code))
 
 getStringFromConstPool constPool x = (string.info) $ constPool !@ (x - 1)
@@ -362,6 +363,7 @@ readMethodInfo pool = do
         name :: String                  <- pure (getStringFromConstPool pool) <*> lift getWord16be
         descriptor :: String            <- pure (getStringFromConstPool pool) <*> lift getWord16be
         attributeCount :: Int           <- pure fromIntegral <*> lift getWord16be
+        --traceM ("name: " ++ name ++ "###################### Attributes ######################### " ++ show attributeCount ++ "\n\n\n\n")
         attributes :: [AttributeInfo]   <- replicateM attributeCount (readAttribute pool) 
         computeThenReturn $ MethodInfo accessFlags name (descriptorIndices descriptor) descriptor attributes 
 
