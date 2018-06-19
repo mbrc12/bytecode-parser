@@ -1,5 +1,5 @@
 name:                bytecode-parser
-version:             0.1.0.0
+version:             1.0.0.0
 github:              "mbrc12/bytecode-parser"
 license:             BSD3
 author:              "Mriganka Basu Roy Chowdhury"
@@ -20,6 +20,10 @@ extra-source-files:
 description:        A simple JVM Bytecode (.class) parser
 dependencies:
 - base >= 4.7 && < 5
+- containers >= 0.5.10
+- directory >= 1.3
+- filepath >= 1.4
+- yaml >= 0.8.20
 - bytestring
 - binary
 - transformers

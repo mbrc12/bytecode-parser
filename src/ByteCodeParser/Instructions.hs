@@ -26,7 +26,6 @@ import qualified Data.ByteString.Lazy as BL
 import Data.Int (Int32)
 import Data.List (zip)
 import Data.Word (Word16, Word32, Word8)
-import Debug.Trace (trace, traceM)
 
 opPutField, opIfNonNull, opIfNull, opLookupSwitch, opTableSwitch, opGoto, opGotoW, opAConstNull, opGetField, opGetStatic ::
        Word8

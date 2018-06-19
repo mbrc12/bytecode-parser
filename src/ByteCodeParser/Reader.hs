@@ -18,8 +18,9 @@ import qualified Data.ByteString.Lazy as BL
 import Data.Char (chr)
 import Data.Either
 import Data.Word (Word16, Word32, Word8)
-import Debug.Trace (trace, traceM)
 import System.IO (FilePath, Handle, IOMode, hGetContents, withFile)
+
+import EtanolTools.Unsafe 
 
 import ByteCodeParser.Instructions (readInstructions)
 
@@ -55,14 +56,17 @@ readVersions = do
 
 baseType = ['B', 'C', 'D', 'F', 'I', 'J', 'S', 'Z'] :: [Char]
 
-twoPlaces = ['J', 'D'] :: [Char] -- base types that take up two consecutive locations on the stack
+twoPlaces = ['J', 'D'] :: [Char] 
+-- base types that take up two consecutive locations on the stack
 
 objType = 'L'
 
 arrayType = '['
 
--- | Given a method descriptor this function will return the positions in the local variable array which are of parameters, 
--- | and if the indexed parameter is a reference (Object/Array), the second argument is true
+-- | Given a method descriptor this function will return the positions in the 
+-- | local variable array which are of parameters, 
+-- | and if the indexed parameter is a reference (Object/Array), 
+-- | the second argument is true
 descriptorIndices :: String -> [(Int, Bool)]
 descriptorIndices descriptor = recursiveCalc desc2 1
   where
@@ -460,11 +464,17 @@ infoAboutClass ::
 infoAboutClass path (Left error) = Left ("In class: " ++ path ++ ", " ++ error)
 infoAboutClass _ (Right x) = Right x
 
+-- | Read from byte-string
+readRawByteString :: BL.ByteString -> IO (Either Error RawClassFile)
+readRawByteString bs = do
+    let result = runGet (runExceptT reader) bs
+    return result
+
 -- | Reads the class file and forms a parsed RawClassFile structure
 readRawClassFile :: ClassName -> IO (Either Error RawClassFile)
 readRawClassFile className = do
-    putStrLn $ "Reading " ++ className
+    debugLoggerM $ "Reading " ++ className
     classFileStream <- getClassFileStream className
-    let result = runGet (runExceptT reader) classFileStream
-    putStrLn "Completed."
+    result <- readRawByteString classFileStream
+    debugLoggerM "Completed"
     return $ infoAboutClass className result
