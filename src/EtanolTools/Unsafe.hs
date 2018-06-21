@@ -6,6 +6,7 @@ module EtanolTools.Unsafe
     (
      Configuration(..),
      VerbosityLevel(..),
+     getVerbosity,
      debugLogger,
      infoLogger,
      seriousLogger,
