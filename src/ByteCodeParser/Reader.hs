@@ -4,6 +4,7 @@
 module ByteCodeParser.Reader
     ( readRawClassFile
     , descriptorIndices
+    , readRawByteString
     ) where
 
 import ByteCodeParser.BasicTypes
@@ -465,16 +466,15 @@ infoAboutClass path (Left error) = Left ("In class: " ++ path ++ ", " ++ error)
 infoAboutClass _ (Right x) = Right x
 
 -- | Read from byte-string
-readRawByteString :: BL.ByteString -> IO (Either Error RawClassFile)
-readRawByteString bs = do
-    let result = runGet (runExceptT reader) bs
-    return result
+readRawByteString :: ClassName -> BL.ByteString -> (Either Error RawClassFile)
+readRawByteString className bs = infoAboutClass className $ 
+                            runGet (runExceptT reader) bs
 
 -- | Reads the class file and forms a parsed RawClassFile structure
 readRawClassFile :: ClassName -> IO (Either Error RawClassFile)
 readRawClassFile className = do
     debugLoggerM $ "Reading " ++ className
     classFileStream <- getClassFileStream className
-    result <- readRawByteString classFileStream
+    let result = readRawByteString className classFileStream
     debugLoggerM "Completed"
     return $ infoAboutClass className result
