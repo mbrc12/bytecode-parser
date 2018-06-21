@@ -26,7 +26,6 @@ dependencies:
 - yaml >= 0.8.20
 - bytestring
 - binary
-- transformers
 
 library:
   source-dirs: src

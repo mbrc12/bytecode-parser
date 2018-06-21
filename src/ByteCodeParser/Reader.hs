@@ -10,8 +10,6 @@ module ByteCodeParser.Reader
 import ByteCodeParser.BasicTypes
 import Control.Applicative ((<*>), pure)
 import Control.Monad (forM, replicateM, when)
-import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Except (ExceptT, except, runExceptT, throwE)
 import Data.Binary
 import Data.Binary.Get (Get, getWord16be, getWord32be, getWord8, runGet)
 import qualified Data.ByteString as B
@@ -34,26 +32,26 @@ getClassFileStream className =
   where
     classFilePath = getClassFilePath className
 
-getRawBytes :: Int -> ExceptT Error Get [Word8]
-getRawBytes how_many = forM [1 .. how_many] (\_ -> lift getWord8)
+getRawBytes :: Int ->  Get [Word8]
+getRawBytes how_many = forM [1 .. how_many] (const getWord8)
 
 -- | Reads the magic number, and checks if its okay.
-readMagicNumber :: ExceptT Error Get Word32
+readMagicNumber :: Get Word32
 readMagicNumber = do
-    magic <- lift getWord32be
+    magic <- getWord32be
     if magic == mAGIC
         then return magic
-        else throwE $ produceError "Magic Number is incorrect."
+        else error $ produceError "Magic Number is incorrect."
 
 -- Read the major and minor versions and return
-readVersions :: ExceptT Error Get (Word16, MajorVersion)
+readVersions :: Get (Word16, MajorVersion)
 readVersions = do
-    minor <- lift getWord16be
-    major <- lift getWord16be
+    minor <- getWord16be
+    major <- getWord16be
     let maybeMajorVersion = toMajorVersion major
     case maybeMajorVersion of
         Right majorVersion -> return (minor, majorVersion)
-        Left errorMessage -> throwE errorMessage
+        Left errorMessage -> error errorMessage
 
 baseType = ['B', 'C', 'D', 'F', 'I', 'J', 'S', 'Z'] :: [Char]
 
@@ -102,75 +100,75 @@ descriptorIndices descriptor = recursiveCalc desc2 1
                               else []
 
 -- Read a Constant from the pool, see 'readConstantPool'
-readConstFromPool :: ExceptT Error Get (ConstantInfo, Int)
+readConstFromPool :: Get (ConstantInfo, Int)
 readConstFromPool = do
-    tag <- lift getWord8
+    tag <- getWord8
     constType <-
         case toConstType tag of
             Right cType -> return cType
-            Left err -> throwE err
+            Left err -> error err
     cinfo <-
         case constType of
             CClass -> do
-                nameIndex <- lift getWord16be
+                nameIndex <- getWord16be
                 return $ CClassI (nameIndex - 1)
             CFieldRef -> do
-                classIndex <- lift getWord16be
-                nameAndTypeIndex <- lift getWord16be
+                classIndex <- getWord16be
+                nameAndTypeIndex <- getWord16be
                 return $ CFieldRefI (classIndex - 1) (nameAndTypeIndex - 1)
             CMethodRef -> do
-                classIndex <- lift getWord16be
-                nameAndTypeIndex <- lift getWord16be
+                classIndex <- getWord16be
+                nameAndTypeIndex <- getWord16be
                 return $ CMethodRefI (classIndex - 1) (nameAndTypeIndex - 1)
             CInterfaceMethodRef -> do
-                classIndex <- lift getWord16be
-                nameAndTypeIndex <- lift getWord16be
+                classIndex <- getWord16be
+                nameAndTypeIndex <- getWord16be
                 return $
                     CInterfaceMethodRefI (classIndex - 1) (nameAndTypeIndex - 1)
             CString -> do
-                stringIndex <- lift getWord16be
+                stringIndex <- getWord16be
                 return $ CStringI (stringIndex - 1)
             CInteger -> do
-                bytei <- lift getWord32be
+                bytei <- getWord32be
                 return $ CIntegerI bytei
             CFloat -> do
-                bytef <- lift getWord32be
+                bytef <- getWord32be
                 return $ CFloatI bytef
             CLong -> do
-                high <- lift getWord32be
-                low <- lift getWord32be
+                high <- getWord32be
+                low <- getWord32be
                 return $ CLongI high low
             CDouble -> do
-                high <- lift getWord32be
-                low <- lift getWord32be
+                high <- getWord32be
+                low <- getWord32be
                 return $ CDoubleI high low
             CNameAndType -> do
-                nameIndex <- lift getWord16be
-                descriptorIndex <- lift getWord16be
+                nameIndex <- getWord16be
+                descriptorIndex <- getWord16be
                 return $ CNameAndTypeI (nameIndex - 1) (descriptorIndex - 1)
             CUtf8 -> do
-                len <- lift getWord16be
-                bytes <- lift $ getBytes len
+                len <- getWord16be
+                bytes <- getBytes len
                 return $ CUtf8I len bytes
             CMethodHandle -> do
-                refkind <- lift getWord8
-                referenceIndex <- lift getWord16be
+                refkind <- getWord8
+                referenceIndex <- getWord16be
                 referenceKind <-
                     case toReferenceKind refkind of
                         Right refKind -> return refKind
-                        Left err -> throwE err
+                        Left err -> error err
                 return $ CMethodHandleI referenceKind (referenceIndex - 1)
             CMethodType -> do
-                descriptorIndex <- lift getWord16be
+                descriptorIndex <- getWord16be
                 return $ CMethodTypeI (descriptorIndex - 1)
             CInvokeDynamic -> do
-                bootstrapMethodAttrIndex <- lift getWord16be
-                nameAndTypeIndex <- lift getWord16be
+                bootstrapMethodAttrIndex <- getWord16be
+                nameAndTypeIndex <- getWord16be
                 return $
                     CInvokeDynamicI
                         (bootstrapMethodAttrIndex - 1)
                         (nameAndTypeIndex - 1)
-    computeThenReturn
+    return $
         ( ConstantInfo constType cinfo
         , if constType == CLong || constType == CDouble
               then 2
@@ -182,18 +180,18 @@ readConstFromPool = do
         (fmap . fmap) (chr . fromIntegral) $ forM [1 .. len] $ const getWord8
 
 -- | Read the Constant Pool
-readConstantPool :: ExceptT Error Get [ConstantInfo]
+readConstantPool :: Get [ConstantInfo]
 readConstantPool = do
-    cpsize <- lift getWord16be
+    cpsize <- getWord16be
     when (cpsize == 0) $
-        throwE $ produceError "Constant pool size is 0, should be atleast 1."
+        error $ produceError "Constant pool size is 0, should be atleast 1."
         -- cpsize - 1 because of ConstantPool size convention
     readPool $ fromIntegral (cpsize - 1)
                 -- reads elements from the pool according to their byte size, specifically, CLong and CDouble are 2 places each
                 -- Note that this duplicates the same value for fields which take up two consecutive locations in the constant pool
                 -- like longs and doubles to keep the constantPool indices okay.
   where
-    readPool :: Int -> ExceptT Error Get [ConstantInfo]
+    readPool :: Int -> Get [ConstantInfo]
     readPool rem =
         if rem == 0
             then return []
@@ -204,26 +202,26 @@ readConstantPool = do
                         then pure (c_elem :) <*> readPool (rem - c_positions)
                         else pure ([c_elem, c_elem] ++) <*>
                              readPool (rem - c_positions)
-                computeThenReturn q
+                return $ q
 
 -- | Reads the access flags
-readAccessFlags :: ExceptT Error Get [ClassAccessFlag]
+readAccessFlags :: Get [ClassAccessFlag]
 readAccessFlags = do
-    flags <- lift getWord16be
+    flags <- getWord16be
     return $ toClassAccessFlags flags
 
 -- | Get the name of this class
-readThisClass :: [ConstantInfo] -> ExceptT Error Get String
+readThisClass :: [ConstantInfo] -> Get String
 readThisClass constPool = do
-    index <- lift getWord16be
+    index <- getWord16be
     let classNameIndex = nameIndex . info $! constPool !@ (index - 1)
         className = string . info $! constPool !@ classNameIndex
     return className
 
 -- | Get the name of the super class
-readSuperClass :: [ConstantInfo] -> ExceptT Error Get (Maybe String)
+readSuperClass :: [ConstantInfo] -> Get (Maybe String)
 readSuperClass constPool = do
-    index <- lift getWord16be
+    index <- getWord16be
     if index == 0
         then return Nothing
         else (return . Just) $
@@ -231,10 +229,10 @@ readSuperClass constPool = do
               in string . info $ constPool !@ classNameIndex
 
 -- | Interfaces and interface count
-readInterfaces :: ExceptT Error Get [Word16]
+readInterfaces :: Get [Word16]
 readInterfaces = do
-    interfacesCount <- lift getWord16be
-    forM [1 .. interfacesCount] (\_ -> pure pred <*> lift getWord16be)
+    interfacesCount <- getWord16be
+    forM [1 .. interfacesCount] (\_ -> pure pred <*> getWord16be)
 
 codeParser :: Get AInfo
 -- returns a AIParsedCode 
@@ -373,55 +371,55 @@ parseAttribute constPool attributeType byteInfo =
                 then parseParseableAttribute constPool attributeType byteInfo
                 else AIMethodParameters byteInfo
 
-readAttribute :: [ConstantInfo] -> ExceptT Error Get AttributeInfo
+readAttribute :: [ConstantInfo] -> Get AttributeInfo
 readAttribute constPool = do
-    attributeNameIndex <- lift getWord16be
+    attributeNameIndex <- getWord16be
     let attributeName =
             string . info $
             (constPool !@ (attributeNameIndex - 1) :: ConstantInfo)
         attributeType = toAttributeType attributeName
     case attributeType of
-        Left errorMessage -> throwE errorMessage
+        Left errorMessage -> error errorMessage
         Right attrType -> do
-            attributeLength :: Int <- pure fromIntegral <*> lift getWord32be
+            attributeLength :: Int <- pure fromIntegral <*> getWord32be
             byteInfo <- getRawBytes attributeLength
-            computeThenReturn $
+            return $
                 AttributeInfo
                     attrType
                     (parseAttribute constPool attrType byteInfo)
 
 -- | Read a field
-readFieldInfo :: [ConstantInfo] -> ExceptT Error Get FieldInfo
+readFieldInfo :: [ConstantInfo] -> Get FieldInfo
 readFieldInfo pool = do
     accessFlags :: [FieldAccessFlag] <-
-        pure toFieldAccessFlags <*> lift getWord16be
-    name :: String <- pure (getStringFromConstPool pool) <*> lift getWord16be
+        pure toFieldAccessFlags <*> getWord16be
+    name :: String <- pure (getStringFromConstPool pool) <*> getWord16be
     descriptor :: String <-
-        pure (getStringFromConstPool pool) <*> lift getWord16be
-    attributeCount :: Int <- pure fromIntegral <*> lift getWord16be
+        pure (getStringFromConstPool pool) <*> getWord16be
+    attributeCount :: Int <- pure fromIntegral <*> getWord16be
     attributes :: [AttributeInfo] <-
         replicateM attributeCount (readAttribute pool)
-    computeThenReturn $ FieldInfo accessFlags name descriptor attributes
+    return $ FieldInfo accessFlags name descriptor attributes
 
 -- | Reads the fields from the bytecode
-readFields :: [ConstantInfo] -> ExceptT Error Get [FieldInfo]
+readFields :: [ConstantInfo] -> Get [FieldInfo]
 readFields pool = do
-    fieldCount :: Int <- pure fromIntegral <*> lift getWord16be
+    fieldCount :: Int <- pure fromIntegral <*> getWord16be
     replicateM fieldCount (readFieldInfo pool)
 
 -- | Read a method
-readMethodInfo :: [ConstantInfo] -> ExceptT Error Get MethodInfo
+readMethodInfo :: [ConstantInfo] -> Get MethodInfo
 readMethodInfo pool = do
     accessFlags :: [MethodAccessFlag] <-
-        pure toMethodAccessFlags <*> lift getWord16be
-    name :: String <- pure (getStringFromConstPool pool) <*> lift getWord16be
+        pure toMethodAccessFlags <*> getWord16be
+    name :: String <- pure (getStringFromConstPool pool) <*> getWord16be
     descriptor :: String <-
-        pure (getStringFromConstPool pool) <*> lift getWord16be
-    attributeCount :: Int <- pure fromIntegral <*> lift getWord16be
+        pure (getStringFromConstPool pool) <*> getWord16be
+    attributeCount :: Int <- pure fromIntegral <*> getWord16be
         --traceM ("name: " ++ name ++ "###################### Attributes ######################### " ++ show attributeCount ++ "\n\n\n\n")
     attributes :: [AttributeInfo] <-
         replicateM attributeCount (readAttribute pool)
-    computeThenReturn $
+    return $
         MethodInfo
             accessFlags
             name
@@ -430,13 +428,13 @@ readMethodInfo pool = do
             attributes
 
 -- | Read the methods from the bytecode
-readMethods :: [ConstantInfo] -> ExceptT Error Get [MethodInfo]
+readMethods :: [ConstantInfo] -> Get [MethodInfo]
 readMethods pool = do
-    methodCount :: Int <- pure fromIntegral <*> lift getWord16be
+    methodCount :: Int <- pure fromIntegral <*> getWord16be
     replicateM methodCount (readMethodInfo pool)
 
 -- | The main reader. This calls many other other sub readers, and produces a RawClassFile structure
-reader :: ExceptT Error Get RawClassFile
+reader :: Get RawClassFile
 reader = do
     magic <- readMagicNumber
     (minor, major) <- readVersions
@@ -460,21 +458,22 @@ reader = do
             fields
             methods
 
+{--
 infoAboutClass ::
        ClassName -> Either Error RawClassFile -> Either Error RawClassFile
 infoAboutClass path (Left error) = Left ("In class: " ++ path ++ ", " ++ error)
 infoAboutClass _ (Right x) = Right x
+--}
 
 -- | Read from byte-string
-readRawByteString :: ClassName -> BL.ByteString -> (Either Error RawClassFile)
-readRawByteString className bs = infoAboutClass className $ 
-                            runGet (runExceptT reader) bs
+readRawByteString :: BL.ByteString -> RawClassFile
+readRawByteString bs = runGet reader bs
 
 -- | Reads the class file and forms a parsed RawClassFile structure
-readRawClassFile :: ClassName -> IO (Either Error RawClassFile)
+readRawClassFile :: ClassName -> IO RawClassFile
 readRawClassFile className = do
     debugLoggerM $ "Reading " ++ className
     classFileStream <- getClassFileStream className
-    let result = readRawByteString className classFileStream
+    let result = readRawByteString classFileStream
     debugLoggerM "Completed"
-    return $ infoAboutClass className result
+    return result
