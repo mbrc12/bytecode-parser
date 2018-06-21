@@ -210,7 +210,7 @@ readConstantPool = do
 readAccessFlags :: ExceptT Error Get [ClassAccessFlag]
 readAccessFlags = do
     flags <- lift getWord16be
-    return $! toClassAccessFlags flags
+    return $ toClassAccessFlags flags
 
 -- | Get the name of this class
 readThisClass :: [ConstantInfo] -> ExceptT Error Get String
@@ -244,7 +244,7 @@ codeParser = do
     codeLength :: Int <- pure fromIntegral <*> getWord32be
     code :: [Word8] <- replicateM codeLength getWord8
         --traceM ("codeParser, it has code :: " ++ show code)
-    return $!
+    return $
         AIParsedCode
             maxStack
             maxLocals
@@ -257,7 +257,7 @@ readParameter :: [ConstantInfo] -> Get MethodParameter
 readParameter constPool = do
     name :: String <- pure (getStringFromConstPool constPool) <*> getWord16be
     accessFlags <- pure toMethodParameterAccessFlags <*> getWord16be
-    return $! MethodParameter name accessFlags
+    return $ MethodParameter name accessFlags
 
 methodParametersParser :: [ConstantInfo] -> Get AInfo
 -- returns the parsed methodParameters
@@ -265,7 +265,7 @@ methodParametersParser constPool = do
     paramCount :: Int <- pure fromIntegral <*> getWord8
     params :: [MethodParameter] <-
         replicateM paramCount (readParameter constPool)
-    return $! AIParsedMethodParameters params
+    return $ AIParsedMethodParameters params
 
 -- | Parse attributes for which there are special methods
 parseParseableAttribute :: [ConstantInfo] -> AttributeType -> [Word8] -> AInfo
@@ -447,7 +447,7 @@ reader = do
     interfaces <- readInterfaces
     fields <- readFields constPool
     methods <- readMethods constPool
-    computeThenReturn $
+    return $
         RawClassFile
             magic
             minor

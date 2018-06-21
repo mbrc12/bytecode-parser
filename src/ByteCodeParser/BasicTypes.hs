@@ -67,16 +67,16 @@ getClassFilePath = (++ classFileExtension)
  -- | The data of a raw class file, without any parsing. The bytecode is just represented almost as is in this.
 
 data RawClassFile = RawClassFile
-    { magicNumber :: !Word32 -- must equal 'mAGIC' for 
-    , minorVersion :: !Word16 -- minor version of .class format
-    , majorVersion :: !MajorVersion -- major version of .class format
-    , constantPool :: ![ConstantInfo] -- Constant Pool
-    , accessFlags :: ![ClassAccessFlag] -- Access Flags
-    , thisClass :: !String -- Name of this class
-    , superClass :: !(Maybe String) -- Name of superclass if any
-    , interfaces :: ![Word16]
-    , fields :: ![FieldInfo] -- fields                         
-    , methods :: ![MethodInfo] -- methods
+    { magicNumber :: Word32 -- must equal 'mAGIC' for 
+    , minorVersion :: Word16 -- minor version of .class format
+    , majorVersion :: MajorVersion -- major version of .class format
+    , constantPool :: [ConstantInfo] -- Constant Pool
+    , accessFlags :: [ClassAccessFlag] -- Access Flags
+    , thisClass :: String -- Name of this class
+    , superClass :: (Maybe String) -- Name of superclass if any
+    , interfaces :: [Word16]
+    , fields :: [FieldInfo] -- fields                         
+    , methods :: [MethodInfo] -- methods
     } deriving (Eq, Show)
 
 -- | Error is used to indicate an error in the form of a string.
@@ -154,35 +154,35 @@ toConstType value =
 
 -- Constant Info structure
 data CInfo
-    = CClassI { nameIndex :: !Word16 }
-    | CFieldRefI { classIndex :: !Word16
-                 , nameAndTypeIndex :: !Word16 }
-    | CMethodRefI { classIndex :: !Word16
-                  , nameAndTypeIndex :: !Word16 }
-    | CInterfaceMethodRefI { classIndex :: !Word16
-                           , nameAndTypeIndex :: !Word16 }
-    | CStringI { stringIndex :: !Word16 }
-    | CIntegerI { bytei :: !Word32 }
-    | CFloatI { bytef :: !Word32 }
-    | CLongI { high :: !Word32
-             , low :: !Word32 }
-    | CDoubleI { high :: !Word32
-               , low :: !Word32 }
-    | CNameAndTypeI { nameIndex :: !Word16
-                    , descriptorIndex :: !Word16 }
-    | CUtf8I { len :: !Word16
-             , string :: !String }
-    | CMethodHandleI { referenceKind :: !ReferenceKind
-                     , referenceIndex :: !Word16 }
-    | CMethodTypeI { descriptorIndex :: !Word16 }
-    | CInvokeDynamicI { bootstrapMethodAttrIndex :: !Word16
-                      , nameAndTypeIndex :: !Word16 }
+    = CClassI { nameIndex :: Word16 }
+    | CFieldRefI { classIndex :: Word16
+                 , nameAndTypeIndex :: Word16 }
+    | CMethodRefI { classIndex :: Word16
+                  , nameAndTypeIndex :: Word16 }
+    | CInterfaceMethodRefI { classIndex :: Word16
+                           , nameAndTypeIndex :: Word16 }
+    | CStringI { stringIndex :: Word16 }
+    | CIntegerI { bytei :: Word32 }
+    | CFloatI { bytef :: Word32 }
+    | CLongI { high :: Word32
+             , low :: Word32 }
+    | CDoubleI { high :: Word32
+               , low :: Word32 }
+    | CNameAndTypeI { nameIndex :: Word16
+                    , descriptorIndex :: Word16 }
+    | CUtf8I { len :: Word16
+             , string :: String }
+    | CMethodHandleI { referenceKind :: ReferenceKind
+                     , referenceIndex :: Word16 }
+    | CMethodTypeI { descriptorIndex :: Word16 }
+    | CInvokeDynamicI { bootstrapMethodAttrIndex :: Word16
+                      , nameAndTypeIndex :: Word16 }
     deriving (Eq, Show)
 
 -- Constant Pool Info Structure
 data ConstantInfo = ConstantInfo
-    { constType :: !ConstType
-    , info :: !CInfo
+    { constType :: ConstType
+    , info :: CInfo
     } deriving (Eq, Show)
 
 -- Reference Kind for method handles, see 'CMethodHandleI'
