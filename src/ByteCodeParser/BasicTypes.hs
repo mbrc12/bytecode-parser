@@ -36,6 +36,7 @@ module ByteCodeParser.BasicTypes
     , CodeAtom
     ) where
 
+
 import Data.Bits
 import Data.Either
 import Data.List (sort, zip)

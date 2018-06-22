@@ -10,14 +10,17 @@ module ByteCodeParser.Reader
 import ByteCodeParser.BasicTypes
 import Control.Applicative ((<*>), pure)
 import Control.Monad (forM, replicateM, when)
-import Data.Binary
-import Data.Binary.Get (Get, getWord16be, getWord32be, getWord8, runGet)
+import Data.Binary.Get (Get, getWord16be, getWord32be, getWord8, runGet, bytesRead)
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
 import Data.Char (chr)
 import Data.Either
+import Data.Int (Int64)
 import Data.Word (Word16, Word32, Word8)
 import System.IO (FilePath, Handle, IOMode, hGetContents, withFile)
+
+import Control.Monad.Trans.Class
+import Control.Monad.ST.Trans
 
 import qualified Data.Text as T
 
@@ -30,7 +33,8 @@ getClassFileStream ::
        ClassName -- ^ The input class
     -> IO BL.ByteString -- ^ The output bytestring stream, wrapped in IO
 getClassFileStream className =
-    pure BL.fromStrict <*> B.readFile classFilePath -- strict reading
+    --pure BL.fromStrict <*> B.readFile classFilePath -- strict reading
+    BL.readFile classFilePath
   where
     classFilePath = getClassFilePath className
 
@@ -193,7 +197,7 @@ readConstantPool = do
     when (cpsize == 0) $
         error $! produceError "Constant pool size is 0, should be atleast 1."
         -- cpsize - 1 because of ConstantPool size convention
-    readPool $! fromIntegral (cpsize - 1)
+    readPool' $! fromIntegral (cpsize - 1)
                 -- reads elements from the pool according to their byte size, specifically, CLong and CDouble are 2 places each
                 -- Note that this duplicates the same value for fields which take up two consecutive locations in the constant pool
                 -- like longs and doubles to keep the constantPool indices okay.
@@ -210,6 +214,36 @@ readConstantPool = do
                         else pure ([c_elem, c_elem] ++) <*>
                              readPool (rem - c_positions)
                 return $! q
+
+    readPool' :: Int -> Get [ConstantInfo]
+    readPool' sz = runSTT $ do
+        cpool <- newSTRef []
+        rem   <- newSTRef sz
+        
+        doTheWork cpool rem
+
+        finalCpool <- readSTRef cpool
+        return $ reverse finalCpool
+
+
+    -- did not dare to write the signature for this!
+    doTheWork cpool rem = do
+        howMuchLeft <- readSTRef rem
+
+        when (howMuchLeft > 0) $ do
+            currentCpool <- readSTRef cpool
+            (c_elem, c_positions) <- lift readConstFromPool
+
+            writeSTRef rem (howMuchLeft - c_positions)
+
+            if c_positions == 2 
+                then writeSTRef cpool (c_elem : (c_elem : (currentCpool)))
+                else writeSTRef cpool (c_elem : currentCpool)
+            
+            doTheWork cpool rem
+
+
+            
 
 -- | Reads the access flags
 readAccessFlags :: Get [ClassAccessFlag]
@@ -247,14 +281,17 @@ codeParser = do
     maxStack :: Int <- pure fromIntegral <*> getWord16be
     maxLocals :: Int <- pure fromIntegral <*> getWord16be
     codeLength :: Int <- pure fromIntegral <*> getWord32be
-    code :: [Word8] <- replicateM codeLength getWord8
+    --code :: [Word8] <- replicateM codeLength getWord8
+    currentlyRead :: Int64 <- bytesRead
+    instructions <- readInstructions (currentlyRead + fromIntegral codeLength)
         --traceM ("codeParser, it has code :: " ++ show code)
     return $!
         AIParsedCode
             maxStack
             maxLocals
             codeLength
-            (runGet readInstructions (BL.pack code))
+            instructions
+            --(runGet readInstructions (BL.pack code))
 
 getStringFromConstPool constPool x = (string . info) $ constPool !@ (x - 1)
 

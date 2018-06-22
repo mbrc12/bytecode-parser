@@ -27,6 +27,8 @@ dependencies:
 - bytestring
 - binary
 - text >= 1.2.2.2
+- STMonadTrans 
+- transformers >= 0.5
 
 library:
   source-dirs: src
@@ -40,6 +42,7 @@ executables:
             - -threaded
             - -rtsopts
             - -with-rtsopts=-N
+            - -funbox-strict-fields
         dependencies:
             - bytecode-parser
 

@@ -20,10 +20,9 @@ module ByteCodeParser.Instructions
 
 import ByteCodeParser.BasicTypes (CInfo, CodeAtom)
 import Control.Monad
-import Data.Binary
 import Data.Binary.Get
 import qualified Data.ByteString.Lazy as BL
-import Data.Int (Int32)
+import Data.Int (Int32, Int64)
 import Data.List (zip)
 import Data.Word (Word16, Word32, Word8)
 
@@ -57,8 +56,8 @@ opPutStatic = 179
 
 opReturns = [176, 175, 174, 172, 173, 169, 177]
 
-readInstructions :: Get [CodeAtom]
-readInstructions = readInstructionsIntoWords 0
+readInstructions :: Int64 -> Get [CodeAtom]
+readInstructions till = readInstructionsIntoWords [] till 0
 
 -- | Given current position returns how many to read to go to a multiple of 4
 toFour :: Int -> Int
@@ -78,15 +77,15 @@ convertToInt xs =
 
 -- | Given a bytestring, this reads the instructions and organizes them, so that each element consists of
 -- | its opcode and the arguments passes to it. Assumed valid bytecode, so no error
-readInstructionsIntoWords :: Int -> Get [CodeAtom]
-readInstructionsIntoWords pos = do
-    !empty <- isEmpty
-    if empty
-        then return []
+readInstructionsIntoWords :: [CodeAtom] -> Int64 -> Int -> Get [CodeAtom]
+readInstructionsIntoWords !accum !till !pos = do
+    currentlyRead <- bytesRead
+    if currentlyRead >= till
+        then return $ reverse accum
         else do
             (!instruction, !pos') <- readInstruction pos
-            !others <- readInstructionsIntoWords pos'
-            return (instruction : others)
+            readInstructionsIntoWords (instruction : accum) till pos'
+            
 
 readInstruction :: Int -> Get (CodeAtom, Int)
 readInstruction pos = do
