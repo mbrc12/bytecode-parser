@@ -19,10 +19,14 @@ import Data.Int (Int64)
 import Data.Word (Word16, Word32, Word8)
 import System.IO (FilePath, Handle, IOMode, hGetContents, withFile)
 
+
+
 import Control.Monad.Trans.Class
 import Control.Monad.ST.Trans
 
 import qualified Data.Text as T
+import qualified Data.Vector as V
+import Data.Vector ((!))
 
 import EtanolTools.Unsafe 
 
@@ -191,7 +195,7 @@ readConstFromPool = do
         fmap T.pack $! (fmap . fmap) (chr . fromIntegral) $! forM [1 .. len] $! const getWord8
 
 -- | Read the Constant Pool
-readConstantPool :: Get [ConstantInfo]
+readConstantPool :: Get (V.Vector ConstantInfo)
 readConstantPool = do
     cpsize <- getWord16be
     when (cpsize == 0) $
@@ -202,7 +206,8 @@ readConstantPool = do
                 -- Note that this duplicates the same value for fields which take up two consecutive locations in the constant pool
                 -- like longs and doubles to keep the constantPool indices okay.
   where
-    readPool :: Int -> Get [ConstantInfo]
+    {--
+    readPool :: Int -> Get V.Vector ConstantInfo
     readPool rem =
         if rem == 0
             then return []
@@ -214,16 +219,16 @@ readConstantPool = do
                         else pure ([c_elem, c_elem] ++) <*>
                              readPool (rem - c_positions)
                 return $! q
-
-    readPool' :: Int -> Get [ConstantInfo]
+    --}
+    readPool' :: Int -> Get (V.Vector ConstantInfo)
     readPool' sz = runSTT $ do
-        cpool <- newSTRef []
+        cpool <- newSTRef V.empty
         rem   <- newSTRef sz
         
         doTheWork cpool rem
 
         finalCpool <- readSTRef cpool
-        return $ reverse finalCpool
+        return finalCpool
 
 
     -- did not dare to write the signature for this!
@@ -237,8 +242,9 @@ readConstantPool = do
             writeSTRef rem (howMuchLeft - c_positions)
 
             if c_positions == 2 
-                then writeSTRef cpool (c_elem : (c_elem : (currentCpool)))
-                else writeSTRef cpool (c_elem : currentCpool)
+                then writeSTRef cpool (V.snoc (V.snoc currentCpool c_elem) 
+                                                                   c_elem)
+                else writeSTRef cpool (V.snoc currentCpool c_elem)
             
             doTheWork cpool rem
 
@@ -252,7 +258,7 @@ readAccessFlags = do
     return $! toClassAccessFlags flags
 
 -- | Get the name of this class
-readThisClass :: [ConstantInfo] -> Get T.Text
+readThisClass :: V.Vector ConstantInfo -> Get T.Text
 readThisClass constPool = do
     index <- getWord16be
     let classNameIndex = nameIndex . info $! constPool !@ (index - 1)
@@ -260,7 +266,7 @@ readThisClass constPool = do
     return className
 
 -- | Get the name of the super class
-readSuperClass :: [ConstantInfo] -> Get (Maybe T.Text)
+readSuperClass :: V.Vector ConstantInfo -> Get (Maybe T.Text)
 readSuperClass constPool = do
     index <- getWord16be
     if index == 0
@@ -295,13 +301,13 @@ codeParser = do
 
 getStringFromConstPool constPool x = (string . info) $ constPool !@ (x - 1)
 
-readParameter :: [ConstantInfo] -> Get MethodParameter
+readParameter :: V.Vector ConstantInfo -> Get MethodParameter
 readParameter constPool = do
     name :: T.Text <- pure (getStringFromConstPool constPool) <*> getWord16be
     accessFlags <- pure toMethodParameterAccessFlags <*> getWord16be
     return $! MethodParameter name accessFlags
 
-methodParametersParser :: [ConstantInfo] -> Get AInfo
+methodParametersParser :: V.Vector ConstantInfo -> Get AInfo
 -- returns the parsed methodParameters
 methodParametersParser constPool = do
     paramCount :: Int <- pure fromIntegral <*> getWord8
@@ -310,7 +316,7 @@ methodParametersParser constPool = do
     return $! AIParsedMethodParameters params
 
 -- | Parse attributes for which there are special methods
-parseParseableAttribute :: [ConstantInfo] -> AttributeType -> [Word8] -> AInfo
+parseParseableAttribute :: V.Vector ConstantInfo -> AttributeType -> [Word8] -> AInfo
 parseParseableAttribute constPool attrType bytes =
     case attrType of
         ATCode -> runGet codeParser (BL.pack bytes)
@@ -319,7 +325,7 @@ parseParseableAttribute constPool attrType bytes =
         _ -> AIDummy -- added just so that this typechecks 
 
 -- | Parse the raw bytes info for attributes if possible
-parseAttribute :: [ConstantInfo] -> AttributeType -> [Word8] -> AInfo
+parseAttribute :: V.Vector ConstantInfo -> AttributeType -> [Word8] -> AInfo
 parseAttribute constPool attributeType byteInfo =
     case attributeType of
         ATConstantValue ->
@@ -415,7 +421,7 @@ parseAttribute constPool attributeType byteInfo =
                 then parseParseableAttribute constPool attributeType byteInfo
                 else AIMethodParameters byteInfo
 
-readAttribute :: [ConstantInfo] -> Get AttributeInfo
+readAttribute :: V.Vector ConstantInfo -> Get AttributeInfo
 readAttribute constPool = do
     attributeNameIndex <- getWord16be
     let attributeName =
@@ -433,7 +439,7 @@ readAttribute constPool = do
                     (parseAttribute constPool attrType byteInfo)
 
 -- | Read a field
-readFieldInfo :: [ConstantInfo] -> Get FieldInfo
+readFieldInfo :: V.Vector ConstantInfo -> Get FieldInfo
 readFieldInfo pool = do
     accessFlags :: [FieldAccessFlag] <-
         pure toFieldAccessFlags <*> getWord16be
@@ -446,13 +452,13 @@ readFieldInfo pool = do
     return $! FieldInfo accessFlags name descriptor attributes
 
 -- | Reads the fields from the bytecode
-readFields :: [ConstantInfo] -> Get [FieldInfo]
+readFields :: V.Vector ConstantInfo -> Get [FieldInfo]
 readFields pool = do
     fieldCount :: Int <- pure fromIntegral <*> getWord16be
     replicateM fieldCount (readFieldInfo pool)
 
 -- | Read a method
-readMethodInfo :: [ConstantInfo] -> Get MethodInfo
+readMethodInfo :: V.Vector ConstantInfo -> Get MethodInfo
 readMethodInfo pool = do
     accessFlags :: [MethodAccessFlag] <-
         pure toMethodAccessFlags <*> getWord16be
@@ -472,7 +478,7 @@ readMethodInfo pool = do
             attributes
 
 -- | Read the methods from the bytecode
-readMethods :: [ConstantInfo] -> Get [MethodInfo]
+readMethods :: V.Vector ConstantInfo -> Get [MethodInfo]
 readMethods pool = do
     methodCount :: Int <- pure fromIntegral <*> getWord16be
     replicateM methodCount (readMethodInfo pool)

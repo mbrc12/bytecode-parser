@@ -44,10 +44,11 @@ import Data.Word (Word16, Word32, Word8)
 import System.IO (FilePath)
 
 import qualified Data.Text as T
-
+import qualified Data.Vector as V
+import Data.Vector ((!))
 -- | !! for [a] -> Word16
-(!@) :: [a] -> Word16 -> a
-(!@) xs pos = xs !! fromIntegral pos
+(!@) :: V.Vector a -> Word16 -> a
+(!@) xs pos = xs ! fromIntegral pos
 
 computeThenReturn :: (Monad m) => a -> m a
 computeThenReturn x = x `seq` (return x)
@@ -73,7 +74,7 @@ data RawClassFile = RawClassFile
     { magicNumber :: !Word32 -- must equal 'mAGIC' for 
     , minorVersion :: !Word16 -- minor version of .class format
     , majorVersion :: !MajorVersion -- major version of .class format
-    , constantPool :: ![ConstantInfo] -- Constant Pool
+    , constantPool :: V.Vector ConstantInfo -- Constant Pool
     , accessFlags :: ![ClassAccessFlag] -- Access Flags
     , thisClass :: !T.Text -- Name of this class
     , superClass :: !(Maybe T.Text) -- Name of superclass if any

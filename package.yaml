@@ -25,6 +25,7 @@ dependencies:
 - filepath >= 1.4
 - yaml >= 0.8.20
 - bytestring
+- vector >= 0.12
 - binary
 - text >= 1.2.2.2
 - STMonadTrans 
