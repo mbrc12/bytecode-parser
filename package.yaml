@@ -26,11 +26,23 @@ dependencies:
 - yaml >= 0.8.20
 - bytestring
 - binary
+- text >= 1.2.2.2
 
 library:
   source-dirs: src
   dependencies:
-  
+
+executables:
+    bptester:
+        main:           Main.hs
+        source-dirs:    app
+        ghc-options:
+            - -threaded
+            - -rtsopts
+            - -with-rtsopts=-N
+        dependencies:
+            - bytecode-parser
+
 tests:
   bytecode-parser-test:
     main:                Spec.hs

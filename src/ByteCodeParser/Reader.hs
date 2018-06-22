@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings, DuplicateRecordFields,
-  ScopedTypeVariables #-}
+  ScopedTypeVariables, BangPatterns #-}
 
 module ByteCodeParser.Reader
     ( readRawClassFile
@@ -19,6 +19,8 @@ import Data.Either
 import Data.Word (Word16, Word32, Word8)
 import System.IO (FilePath, Handle, IOMode, hGetContents, withFile)
 
+import qualified Data.Text as T
+
 import EtanolTools.Unsafe 
 
 import ByteCodeParser.Instructions (readInstructions)
@@ -33,7 +35,9 @@ getClassFileStream className =
     classFilePath = getClassFilePath className
 
 getRawBytes :: Int ->  Get [Word8]
-getRawBytes how_many = forM [1 .. how_many] (const getWord8)
+getRawBytes how_many = do
+    result <- forM [1 .. how_many] (const getWord8)
+    return $! result
 
 -- | Reads the magic number, and checks if its okay.
 readMagicNumber :: Get Word32
@@ -41,7 +45,7 @@ readMagicNumber = do
     magic <- getWord32be
     if magic == mAGIC
         then return magic
-        else error $ produceError "Magic Number is incorrect."
+        else error $! produceError "Magic Number is incorrect."
 
 -- Read the major and minor versions and return
 readVersions :: Get (Word16, MajorVersion)
@@ -50,7 +54,7 @@ readVersions = do
     major <- getWord16be
     let maybeMajorVersion = toMajorVersion major
     case maybeMajorVersion of
-        Right majorVersion -> return (minor, majorVersion)
+        Right majorVersion -> return $! (minor, majorVersion)
         Left errorMessage -> error errorMessage
 
 baseType = ['B', 'C', 'D', 'F', 'I', 'J', 'S', 'Z'] :: [Char]
@@ -66,13 +70,13 @@ arrayType = '['
 -- | local variable array which are of parameters, 
 -- | and if the indexed parameter is a reference (Object/Array), 
 -- | the second argument is true
-descriptorIndices :: String -> [(Int, Bool)]
+descriptorIndices :: T.Text -> [(Int, Bool)]
 descriptorIndices descriptor = recursiveCalc desc2 1
   where
-    desc2 = takeWhile (')' /=) $ drop 1 descriptor -- Convert (xxx)yyy -> xxx
-    recursiveCalc :: String -> Int -> [(Int, Bool)]
+    desc2 = T.takeWhile (')' /=) $! T.drop 1 descriptor -- Convert (xxx)yyy -> xxx
+    recursiveCalc :: T.Text -> Int -> [(Int, Bool)]
     recursiveCalc ("") x = []
-    recursiveCalc (c:left) x =
+    recursiveCalc des x =
         if c `elem` baseType
             then if c `elem` twoPlaces
                      then (x, False) : recursiveCalc left (x + 2)
@@ -80,24 +84,27 @@ descriptorIndices descriptor = recursiveCalc desc2 1
             else if c == objType
                      then (x, True) :
                           recursiveCalc
-                              (drop 1 $ dropWhile (';' /=) left)
+                              (T.drop 1 $! T.dropWhile (';' /=) left)
                               (x + 1)
                      else if c == arrayType
-                              then let arrTypeAnd = dropWhile ('[' ==) left
-                                       arrType = head arrTypeAnd
+                              then let arrTypeAnd = T.dropWhile ('[' ==) left
+                                       arrType = T.head arrTypeAnd
                                     in if arrType == objType
                                            then (x, True) :
                                                 recursiveCalc
-                                                    (drop 1 $
-                                                     dropWhile
+                                                    (T.drop 1 $!
+                                                     T.dropWhile
                                                          (';' /=)
                                                          arrTypeAnd)
                                                     (x + 1)
                                            else (x, True) :
                                                 recursiveCalc
-                                                    (drop 1 arrTypeAnd)
+                                                    (T.drop 1 arrTypeAnd)
                                                     (x + 1)
                               else []
+        where 
+              c     = T.head des
+              left  = T.tail des 
 
 -- Read a Constant from the pool, see 'readConstantPool'
 readConstFromPool :: Get (ConstantInfo, Int)
@@ -111,45 +118,45 @@ readConstFromPool = do
         case constType of
             CClass -> do
                 nameIndex <- getWord16be
-                return $ CClassI (nameIndex - 1)
+                return $! CClassI (nameIndex - 1)
             CFieldRef -> do
                 classIndex <- getWord16be
                 nameAndTypeIndex <- getWord16be
-                return $ CFieldRefI (classIndex - 1) (nameAndTypeIndex - 1)
+                return $! CFieldRefI (classIndex - 1) (nameAndTypeIndex - 1)
             CMethodRef -> do
                 classIndex <- getWord16be
                 nameAndTypeIndex <- getWord16be
-                return $ CMethodRefI (classIndex - 1) (nameAndTypeIndex - 1)
+                return $! CMethodRefI (classIndex - 1) (nameAndTypeIndex - 1)
             CInterfaceMethodRef -> do
                 classIndex <- getWord16be
                 nameAndTypeIndex <- getWord16be
-                return $
+                return $!
                     CInterfaceMethodRefI (classIndex - 1) (nameAndTypeIndex - 1)
             CString -> do
                 stringIndex <- getWord16be
-                return $ CStringI (stringIndex - 1)
+                return $! CStringI (stringIndex - 1)
             CInteger -> do
                 bytei <- getWord32be
-                return $ CIntegerI bytei
+                return $! CIntegerI bytei
             CFloat -> do
                 bytef <- getWord32be
-                return $ CFloatI bytef
+                return $! CFloatI bytef
             CLong -> do
                 high <- getWord32be
                 low <- getWord32be
-                return $ CLongI high low
+                return $! CLongI high low
             CDouble -> do
                 high <- getWord32be
                 low <- getWord32be
-                return $ CDoubleI high low
+                return $! CDoubleI high low
             CNameAndType -> do
                 nameIndex <- getWord16be
                 descriptorIndex <- getWord16be
-                return $ CNameAndTypeI (nameIndex - 1) (descriptorIndex - 1)
+                return $! CNameAndTypeI (nameIndex - 1) (descriptorIndex - 1)
             CUtf8 -> do
                 len <- getWord16be
                 bytes <- getBytes len
-                return $ CUtf8I len bytes
+                return $! CUtf8I len bytes
             CMethodHandle -> do
                 refkind <- getWord8
                 referenceIndex <- getWord16be
@@ -157,36 +164,37 @@ readConstFromPool = do
                     case toReferenceKind refkind of
                         Right refKind -> return refKind
                         Left err -> error err
-                return $ CMethodHandleI referenceKind (referenceIndex - 1)
+                return $! CMethodHandleI referenceKind (referenceIndex - 1)
             CMethodType -> do
                 descriptorIndex <- getWord16be
-                return $ CMethodTypeI (descriptorIndex - 1)
+                return $! CMethodTypeI (descriptorIndex - 1)
             CInvokeDynamic -> do
                 bootstrapMethodAttrIndex <- getWord16be
                 nameAndTypeIndex <- getWord16be
-                return $
+                return $!
                     CInvokeDynamicI
                         (bootstrapMethodAttrIndex - 1)
                         (nameAndTypeIndex - 1)
-    return $
+    return $!
         ( ConstantInfo constType cinfo
         , if constType == CLong || constType == CDouble
               then 2
               else 1)
                 -- | getBytes gets len bytes from the input
   where
-    getBytes :: Word16 -> Get String
+    getBytes :: Word16 -> Get T.Text
     getBytes len =
-        (fmap . fmap) (chr . fromIntegral) $ forM [1 .. len] $ const getWord8
+        fmap T.pack $! (fmap . fmap) (chr . fromIntegral) $! forM [1 .. len] $! const getWord8
 
 -- | Read the Constant Pool
 readConstantPool :: Get [ConstantInfo]
 readConstantPool = do
     cpsize <- getWord16be
+    debugLoggerM $ show cpsize
     when (cpsize == 0) $
-        error $ produceError "Constant pool size is 0, should be atleast 1."
+        error $! produceError "Constant pool size is 0, should be atleast 1."
         -- cpsize - 1 because of ConstantPool size convention
-    readPool $ fromIntegral (cpsize - 1)
+    readPool $! fromIntegral (cpsize - 1)
                 -- reads elements from the pool according to their byte size, specifically, CLong and CDouble are 2 places each
                 -- Note that this duplicates the same value for fields which take up two consecutive locations in the constant pool
                 -- like longs and doubles to keep the constantPool indices okay.
@@ -196,22 +204,22 @@ readConstantPool = do
         if rem == 0
             then return []
             else do
-                (c_elem, c_positions) <- readConstFromPool
+                (!c_elem, !c_positions) <- readConstFromPool
                 q <-
                     if c_positions == 1
                         then pure (c_elem :) <*> readPool (rem - c_positions)
                         else pure ([c_elem, c_elem] ++) <*>
                              readPool (rem - c_positions)
-                return $ q
+                return $! q
 
 -- | Reads the access flags
 readAccessFlags :: Get [ClassAccessFlag]
 readAccessFlags = do
     flags <- getWord16be
-    return $ toClassAccessFlags flags
+    return $! toClassAccessFlags flags
 
 -- | Get the name of this class
-readThisClass :: [ConstantInfo] -> Get String
+readThisClass :: [ConstantInfo] -> Get T.Text
 readThisClass constPool = do
     index <- getWord16be
     let classNameIndex = nameIndex . info $! constPool !@ (index - 1)
@@ -219,14 +227,14 @@ readThisClass constPool = do
     return className
 
 -- | Get the name of the super class
-readSuperClass :: [ConstantInfo] -> Get (Maybe String)
+readSuperClass :: [ConstantInfo] -> Get (Maybe T.Text)
 readSuperClass constPool = do
     index <- getWord16be
     if index == 0
         then return Nothing
-        else (return . Just) $
-             let classNameIndex = nameIndex . info $ constPool !@ (index - 1)
-              in string . info $ constPool !@ classNameIndex
+        else (return . Just) $!
+             let classNameIndex = nameIndex . info $! constPool !@ (index - 1)
+              in string . info $! constPool !@ classNameIndex
 
 -- | Interfaces and interface count
 readInterfaces :: Get [Word16]
@@ -242,7 +250,7 @@ codeParser = do
     codeLength :: Int <- pure fromIntegral <*> getWord32be
     code :: [Word8] <- replicateM codeLength getWord8
         --traceM ("codeParser, it has code :: " ++ show code)
-    return $
+    return $!
         AIParsedCode
             maxStack
             maxLocals
@@ -253,9 +261,9 @@ getStringFromConstPool constPool x = (string . info) $ constPool !@ (x - 1)
 
 readParameter :: [ConstantInfo] -> Get MethodParameter
 readParameter constPool = do
-    name :: String <- pure (getStringFromConstPool constPool) <*> getWord16be
+    name :: T.Text <- pure (getStringFromConstPool constPool) <*> getWord16be
     accessFlags <- pure toMethodParameterAccessFlags <*> getWord16be
-    return $ MethodParameter name accessFlags
+    return $! MethodParameter name accessFlags
 
 methodParametersParser :: [ConstantInfo] -> Get AInfo
 -- returns the parsed methodParameters
@@ -263,7 +271,7 @@ methodParametersParser constPool = do
     paramCount :: Int <- pure fromIntegral <*> getWord8
     params :: [MethodParameter] <-
         replicateM paramCount (readParameter constPool)
-    return $ AIParsedMethodParameters params
+    return $! AIParsedMethodParameters params
 
 -- | Parse attributes for which there are special methods
 parseParseableAttribute :: [ConstantInfo] -> AttributeType -> [Word8] -> AInfo
@@ -375,7 +383,7 @@ readAttribute :: [ConstantInfo] -> Get AttributeInfo
 readAttribute constPool = do
     attributeNameIndex <- getWord16be
     let attributeName =
-            string . info $
+            string . info $!
             (constPool !@ (attributeNameIndex - 1) :: ConstantInfo)
         attributeType = toAttributeType attributeName
     case attributeType of
@@ -383,7 +391,7 @@ readAttribute constPool = do
         Right attrType -> do
             attributeLength :: Int <- pure fromIntegral <*> getWord32be
             byteInfo <- getRawBytes attributeLength
-            return $
+            return $!
                 AttributeInfo
                     attrType
                     (parseAttribute constPool attrType byteInfo)
@@ -393,13 +401,13 @@ readFieldInfo :: [ConstantInfo] -> Get FieldInfo
 readFieldInfo pool = do
     accessFlags :: [FieldAccessFlag] <-
         pure toFieldAccessFlags <*> getWord16be
-    name :: String <- pure (getStringFromConstPool pool) <*> getWord16be
-    descriptor :: String <-
+    name :: T.Text <- pure (getStringFromConstPool pool) <*> getWord16be
+    descriptor :: T.Text <-
         pure (getStringFromConstPool pool) <*> getWord16be
     attributeCount :: Int <- pure fromIntegral <*> getWord16be
     attributes :: [AttributeInfo] <-
         replicateM attributeCount (readAttribute pool)
-    return $ FieldInfo accessFlags name descriptor attributes
+    return $! FieldInfo accessFlags name descriptor attributes
 
 -- | Reads the fields from the bytecode
 readFields :: [ConstantInfo] -> Get [FieldInfo]
@@ -412,14 +420,14 @@ readMethodInfo :: [ConstantInfo] -> Get MethodInfo
 readMethodInfo pool = do
     accessFlags :: [MethodAccessFlag] <-
         pure toMethodAccessFlags <*> getWord16be
-    name :: String <- pure (getStringFromConstPool pool) <*> getWord16be
-    descriptor :: String <-
+    name :: T.Text <- pure (getStringFromConstPool pool) <*> getWord16be
+    descriptor :: T.Text <-
         pure (getStringFromConstPool pool) <*> getWord16be
     attributeCount :: Int <- pure fromIntegral <*> getWord16be
         --traceM ("name: " ++ name ++ "###################### Attributes ######################### " ++ show attributeCount ++ "\n\n\n\n")
     attributes :: [AttributeInfo] <-
         replicateM attributeCount (readAttribute pool)
-    return $
+    return $!
         MethodInfo
             accessFlags
             name
@@ -437,7 +445,9 @@ readMethods pool = do
 reader :: Get RawClassFile
 reader = do
     magic <- readMagicNumber
+    debugLoggerM $ show magic
     (minor, major) <- readVersions
+    debugLoggerM $ show major
     constPool <- readConstantPool
     accessFlags <- readAccessFlags
     thisClass <- readThisClass constPool
@@ -445,7 +455,7 @@ reader = do
     interfaces <- readInterfaces
     fields <- readFields constPool
     methods <- readMethods constPool
-    return $
+    return $!
         RawClassFile
             magic
             minor
@@ -467,12 +477,13 @@ infoAboutClass _ (Right x) = Right x
 
 -- | Read from byte-string
 readRawByteString :: BL.ByteString -> RawClassFile
-readRawByteString bs = runGet reader bs
+readRawByteString !bs = runGet reader bs
 
 -- | Reads the class file and forms a parsed RawClassFile structure
 readRawClassFile :: ClassName -> IO RawClassFile
 readRawClassFile className = do
-    debugLoggerM $ "Reading " ++ className
+    let unpacked = T.unpack className
+    debugLoggerM $ "Reading " ++ unpacked
     classFileStream <- getClassFileStream className
     let result = readRawByteString classFileStream
     debugLoggerM "Completed"

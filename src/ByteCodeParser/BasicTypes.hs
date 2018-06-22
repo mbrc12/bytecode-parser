@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, DuplicateRecordFields #-}
+{-# LANGUAGE OverloadedStrings, DuplicateRecordFields, BangPatterns #-}
 
 module ByteCodeParser.BasicTypes
     ( (!@)
@@ -42,6 +42,8 @@ import Data.List (sort, zip)
 import Data.Word (Word16, Word32, Word8)
 import System.IO (FilePath)
 
+import qualified Data.Text as T
+
 -- | !! for [a] -> Word16
 (!@) :: [a] -> Word16 -> a
 (!@) xs pos = xs !! fromIntegral pos
@@ -53,30 +55,30 @@ computeThenReturn x = x `seq` (return x)
 mAGIC :: Word32
 mAGIC = 0xCAFEBABE
 
-classFileExtension :: String
+classFileExtension :: T.Text
 classFileExtension = ".class"
 
 -- | ClassName stands for just the name of the class.
-type ClassName = String
+type ClassName = T.Text
 
 type CodeAtom = (Int, [Word8])
 
 -- | Produces the file path of the class from the ClassName
 getClassFilePath :: ClassName -> FilePath
-getClassFilePath = (++ classFileExtension)
+getClassFilePath cname = T.unpack $ T.append cname classFileExtension
  -- | The data of a raw class file, without any parsing. The bytecode is just represented almost as is in this.
 
 data RawClassFile = RawClassFile
-    { magicNumber :: Word32 -- must equal 'mAGIC' for 
-    , minorVersion :: Word16 -- minor version of .class format
-    , majorVersion :: MajorVersion -- major version of .class format
-    , constantPool :: [ConstantInfo] -- Constant Pool
-    , accessFlags :: [ClassAccessFlag] -- Access Flags
-    , thisClass :: String -- Name of this class
-    , superClass :: (Maybe String) -- Name of superclass if any
-    , interfaces :: [Word16]
-    , fields :: [FieldInfo] -- fields                         
-    , methods :: [MethodInfo] -- methods
+    { magicNumber :: !Word32 -- must equal 'mAGIC' for 
+    , minorVersion :: !Word16 -- minor version of .class format
+    , majorVersion :: !MajorVersion -- major version of .class format
+    , constantPool :: ![ConstantInfo] -- Constant Pool
+    , accessFlags :: ![ClassAccessFlag] -- Access Flags
+    , thisClass :: !T.Text -- Name of this class
+    , superClass :: !(Maybe T.Text) -- Name of superclass if any
+    , interfaces :: ![Word16]
+    , fields :: ![FieldInfo] -- fields                         
+    , methods :: ![MethodInfo] -- methods
     } deriving (Eq, Show)
 
 -- | Error is used to indicate an error in the form of a string.
@@ -154,35 +156,35 @@ toConstType value =
 
 -- Constant Info structure
 data CInfo
-    = CClassI { nameIndex :: Word16 }
-    | CFieldRefI { classIndex :: Word16
-                 , nameAndTypeIndex :: Word16 }
-    | CMethodRefI { classIndex :: Word16
-                  , nameAndTypeIndex :: Word16 }
-    | CInterfaceMethodRefI { classIndex :: Word16
-                           , nameAndTypeIndex :: Word16 }
-    | CStringI { stringIndex :: Word16 }
-    | CIntegerI { bytei :: Word32 }
-    | CFloatI { bytef :: Word32 }
-    | CLongI { high :: Word32
-             , low :: Word32 }
-    | CDoubleI { high :: Word32
-               , low :: Word32 }
-    | CNameAndTypeI { nameIndex :: Word16
-                    , descriptorIndex :: Word16 }
-    | CUtf8I { len :: Word16
-             , string :: String }
-    | CMethodHandleI { referenceKind :: ReferenceKind
-                     , referenceIndex :: Word16 }
-    | CMethodTypeI { descriptorIndex :: Word16 }
-    | CInvokeDynamicI { bootstrapMethodAttrIndex :: Word16
-                      , nameAndTypeIndex :: Word16 }
+    = CClassI { nameIndex :: !Word16 }
+    | CFieldRefI { classIndex :: !Word16
+                 , nameAndTypeIndex :: !Word16 }
+    | CMethodRefI { classIndex :: !Word16
+                  , nameAndTypeIndex :: !Word16 }
+    | CInterfaceMethodRefI { classIndex :: !Word16
+                           , nameAndTypeIndex :: !Word16 }
+    | CStringI { stringIndex :: !Word16 }
+    | CIntegerI { bytei :: !Word32 }
+    | CFloatI { bytef :: !Word32 }
+    | CLongI { high :: !Word32
+             , low :: !Word32 }
+    | CDoubleI { high :: !Word32
+               , low :: !Word32 }
+    | CNameAndTypeI { nameIndex :: !Word16
+                    , descriptorIndex :: !Word16 }
+    | CUtf8I { len :: !Word16
+             , string :: !T.Text }
+    | CMethodHandleI { referenceKind :: !ReferenceKind
+                     , referenceIndex :: !Word16 }
+    | CMethodTypeI { descriptorIndex :: !Word16 }
+    | CInvokeDynamicI { bootstrapMethodAttrIndex :: !Word16
+                      , nameAndTypeIndex :: !Word16 }
     deriving (Eq, Show)
 
 -- Constant Pool Info Structure
 data ConstantInfo = ConstantInfo
-    { constType :: ConstType
-    , info :: CInfo
+    { constType :: !ConstType
+    , info :: !CInfo
     } deriving (Eq, Show)
 
 -- Reference Kind for method handles, see 'CMethodHandleI'
@@ -211,7 +213,7 @@ toReferenceKind value =
         7 -> Right RInvokeSpecial
         8 -> Right RNewInvokeSpecial
         9 -> Right RInvokeInterface
-        _ -> Left $ produceError $ "Invalid reference kind number" ++ show value
+        _ -> Left $! produceError $ "Invalid reference kind number" ++ show value
 
 -- | Access Flags data structure
 data MethodAccessFlag
@@ -232,7 +234,7 @@ data MethodAccessFlag
 -- | Convert Accessflag integer to [AccessFlag]
 toMethodAccessFlags :: Word16 -> [MethodAccessFlag]
 toMethodAccessFlags flags =
-    sort $
+    sort $!
     map (([ AMPublic
           , AMPrivate
           , AMProtected
@@ -246,9 +248,9 @@ toMethodAccessFlags flags =
           , AMStrict
           , AMSynthetic
           ] !!) .
-         fst) $
-    filter (\(_, bits) -> flags .&. bits /= 0) $
-    zip [0 ..] $
+         fst) $!
+    filter (\(_, bits) -> flags .&. bits /= 0) $!
+    zip [0 ..] $!
     [ 0x0001
     , 0x0002
     , 0x0004
@@ -277,7 +279,7 @@ data FieldAccessFlag
 
 toFieldAccessFlags :: Word16 -> [FieldAccessFlag]
 toFieldAccessFlags flags =
-    sort $
+    sort $!
     map (([ AFPublic
           , AFPrivate
           , AFProtected
@@ -288,9 +290,9 @@ toFieldAccessFlags flags =
           , AFSynthetic
           , AFEnum
           ] !!) .
-         fst) $
-    filter (\(_, bits) -> flags .&. bits /= 0) $
-    zip [0 ..] $
+         fst) $!
+    filter (\(_, bits) -> flags .&. bits /= 0) $!
+    zip [0 ..] $!
     [0x0001, 0x0002, 0x0004, 0x0008, 0x0010, 0x0040, 0x0080, 0x1000, 0x4000]
 
 data ClassAccessFlag
@@ -306,7 +308,7 @@ data ClassAccessFlag
 
 toClassAccessFlags :: Word16 -> [ClassAccessFlag]
 toClassAccessFlags flags =
-    sort $
+    sort $!
     map (([ ACPublic
           , ACFinal
           , ACSuper
@@ -316,9 +318,9 @@ toClassAccessFlags flags =
           , ACAnnotation
           , ACEnum
           ] !!) .
-         fst) $
-    filter (\(_, bits) -> flags .&. bits /= 0) $
-    zip [0 ..] $
+         fst) $!
+    filter (\(_, bits) -> flags .&. bits /= 0) $!
+    zip [0 ..] $!
     [0x0001, 0x0010, 0x0020, 0x0200, 0x0400, 0x1000, 0x2000, 0x4000]
 
 data MethodParameterAccessFlag
@@ -329,10 +331,10 @@ data MethodParameterAccessFlag
 
 toMethodParameterAccessFlags :: Word16 -> [MethodParameterAccessFlag]
 toMethodParameterAccessFlags flags =
-    sort $
-    map (([AMPFinal, AMPSynthetic, AMPMandated] !!) . fst) $
-    filter (\(_, bits) -> flags .&. bits /= 0) $
-    zip [0 ..] $ [0x0010, 0x1000, 0x8000]
+    sort $!
+    map (([AMPFinal, AMPSynthetic, AMPMandated] !!) . fst) $!
+    filter (\(_, bits) -> flags .&. bits /= 0) $!
+    zip [0 ..] $! [0x0010, 0x1000, 0x8000]
 
 -- | Attributes 
 data AttributeType
@@ -411,7 +413,7 @@ data ParameterAnnotations = ParameterAnnotations {
 -}
 -- | See 'AIMethodParameters
 data MethodParameter = MethodParameter
-    { name :: !String
+    { name :: !T.Text
     , accessFlags :: ![MethodParameterAccessFlag]
     } deriving (Eq, Show)
 
@@ -528,7 +530,7 @@ data AttributeInfo = AttributeInfo
     } deriving (Eq, Show)
 
 -- Converts String to represented Attribute Type
-toAttributeType :: String -> Either Error AttributeType
+toAttributeType :: T.Text -> Either Error AttributeType
 toAttributeType s =
     case s of
         "ConstantValue" -> Right ATConstantValue
@@ -553,20 +555,20 @@ toAttributeType s =
         "AnnotationDefault" -> Right ATAnnotationDefault
         "BootstrapMethods" -> Right ATBootstrapMethods
         "MethodParameters" -> Right ATMethodParameters
-        _ -> Left $ produceError $ "Invalid Attribute Type" ++ s
+        _ -> Left $! produceError $ "Invalid Attribute Type" ++ T.unpack s
 
 -- | Field Info structure
 data FieldInfo = FieldInfo
     { accessFlags :: ![FieldAccessFlag]
-    , name :: !String
-    , descriptor :: !String
+    , name :: !T.Text
+    , descriptor :: !T.Text
     , attributes :: ![AttributeInfo]
     } deriving (Eq, Show)
 
 data MethodInfo = MethodInfo
     { accessFlags :: ![MethodAccessFlag]
-    , name :: !String
+    , name :: !T.Text
     , descriptor :: ![(Int, Bool)] -- see comments on 'descriptorIndices' in Reader.hs for info on what these values mean
-    , descriptorString :: !String
+    , descriptorString :: !T.Text
     , attributes :: ![AttributeInfo]
     } deriving (Eq, Show)

@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings, DuplicateRecordFields,
-  ScopedTypeVariables #-}
+  ScopedTypeVariables, BangPatterns #-}
 
 module ByteCodeParser.Instructions
     ( readInstructions
@@ -71,43 +71,43 @@ toFour x =
 convertToInt :: [Word8] -> Int
 convertToInt xs =
     let signedval :: Int32 =
-            sum $
-            map (\(x, y) -> x * y) $
-            zip [2 ^ 24, 2 ^ 16, 2 ^ 8, 1] $ map fromIntegral xs
+            sum $!
+            map (\(x, y) -> x * y) $!
+            zip [2 ^ 24, 2 ^ 16, 2 ^ 8, 1] $! map fromIntegral xs
      in fromIntegral signedval
 
 -- | Given a bytestring, this reads the instructions and organizes them, so that each element consists of
 -- | its opcode and the arguments passes to it. Assumed valid bytecode, so no error
 readInstructionsIntoWords :: Int -> Get [CodeAtom]
 readInstructionsIntoWords pos = do
-    empty <- isEmpty
+    !empty <- isEmpty
     if empty
         then return []
         else do
-            (instruction, pos') <- readInstruction pos
-            others <- readInstructionsIntoWords pos'
+            (!instruction, !pos') <- readInstruction pos
+            !others <- readInstructionsIntoWords pos'
             return (instruction : others)
 
 readInstruction :: Int -> Get (CodeAtom, Int)
 readInstruction pos = do
-    opcode <- getWord8
+    !opcode <- getWord8
     let howManyMore = consumeBytes opcode
     if howManyMore == -1
         then case opcode of
                  196 -- wide
                   -> do
-                     op <- getWord8
+                     !op <- getWord8
                      if op == 132 -- iinc
                          then do
-                             others <- replicateM 4 getWord8
+                             !others <- replicateM 4 getWord8
                              return ((pos, [opcode, op] ++ others), pos + 6)
                          else do
-                             others <- replicateM 2 getWord8
+                             !others <- replicateM 2 getWord8
                              return ((pos, [opcode, op] ++ others), pos + 4)
                  170 -- tableswitch
                   -> do
                      let padding = toFour pos
-                     pad <- replicateM_ padding getWord8
+                     !pad <- replicateM_ padding getWord8
                      [d1, d2, d3, d4] <- replicateM 4 getWord8
                      [l1, l2, l3, l4] <- replicateM 4 getWord8
                      [h1, h2, h3, h4] <- replicateM 4 getWord8
@@ -116,8 +116,8 @@ readInstruction pos = do
                          toRead = (high - low + 1) * 4
                                                 --traceM $ "The low is : " ++ show low
                                                 --traceM $ "The high is : " ++ show high
-                     manyMore <- replicateM toRead getWord8
-                     return
+                     !manyMore <- replicateM toRead getWord8
+                     return $!
                          ( ( pos
                            , [ opcode
                              , d1
@@ -139,19 +139,19 @@ readInstruction pos = do
                   -> do
                      let padding = toFour pos
                      replicateM_ padding getWord8
-                     [d1, d2, d3, d4] <- replicateM 4 getWord8
-                     [n1, n2, n3, n4] <- replicateM 4 getWord8
+                     ![d1, d2, d3, d4] <- replicateM 4 getWord8
+                     ![n1, n2, n3, n4] <- replicateM 4 getWord8
                      let nPairs = convertToInt [n1, n2, n3, n4]
                          toRead = nPairs * 4 * 2
-                     manyMore <- replicateM toRead getWord8
-                     return
+                     !manyMore <- replicateM toRead getWord8
+                     return $!
                          ( ( pos
                            , [opcode, d1, d2, d3, d4, n1, n2, n3, n4] ++
                              manyMore)
                          , pos + 1 + padding + 8 + toRead)
         else do
-            bytes <- replicateM howManyMore getWord8
-            return ((pos, opcode : bytes), pos + 1 + howManyMore)
+            !bytes <- replicateM howManyMore getWord8
+            return $! ((pos, opcode : bytes), pos + 1 + howManyMore)
 
 -- | assumes verified bytecodes, so no error
 -- | returns the number of more bytes to be consumed by this instruction
