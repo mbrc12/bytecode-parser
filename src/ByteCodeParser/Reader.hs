@@ -190,7 +190,6 @@ readConstFromPool = do
 readConstantPool :: Get [ConstantInfo]
 readConstantPool = do
     cpsize <- getWord16be
-    debugLoggerM $ show cpsize
     when (cpsize == 0) $
         error $! produceError "Constant pool size is 0, should be atleast 1."
         -- cpsize - 1 because of ConstantPool size convention
@@ -445,9 +444,7 @@ readMethods pool = do
 reader :: Get RawClassFile
 reader = do
     magic <- readMagicNumber
-    debugLoggerM $ show magic
     (minor, major) <- readVersions
-    debugLoggerM $ show major
     constPool <- readConstantPool
     accessFlags <- readAccessFlags
     thisClass <- readThisClass constPool
