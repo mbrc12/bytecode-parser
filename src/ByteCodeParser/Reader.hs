@@ -33,8 +33,8 @@ getClassFileStream ::
        ClassName -- ^ The input class
     -> IO BL.ByteString -- ^ The output bytestring stream, wrapped in IO
 getClassFileStream className =
-    --pure BL.fromStrict <*> B.readFile classFilePath -- strict reading
-    BL.readFile classFilePath
+    pure BL.fromStrict <*> B.readFile classFilePath -- strict reading
+    --BL.readFile classFilePath
   where
     classFilePath = getClassFilePath className
 
