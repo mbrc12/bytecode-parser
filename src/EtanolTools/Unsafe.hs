@@ -3,16 +3,17 @@
 {- Provides a logging interface using unsafe routines -}
 
 module EtanolTools.Unsafe 
-    (
-     Configuration(..),
-     VerbosityLevel(..),
-     getVerbosity,
-     debugLogger,
-     infoLogger,
-     seriousLogger,
-     debugLoggerM,
-     infoLoggerM,
-     seriousLoggerM
+    ( Configuration(..)
+    , VerbosityLevel(..)
+    , BackendType(..)
+    , getVerbosity
+    , getBackend
+    , debugLogger
+    , infoLogger
+    , seriousLogger
+    , debugLoggerM
+    , infoLoggerM
+    , seriousLoggerM
     ) where
 
 import System.Exit (die)
@@ -33,7 +34,8 @@ confFile :: String
 confFile = ".etanolglobalconfig"
 
 data Configuration = Configuration {
-    verbosity :: VerbosityLevel
+    verbosity :: VerbosityLevel,
+    backend   :: BackendType
 } deriving (Show, Read, Eq, Ord, G.Generic)
 
 instance Y.FromJSON Configuration
@@ -46,22 +48,33 @@ globalConfigFile = do
     then die $ "Please set the HOME environment variable."
     else return ((fromJust hDir) </> confFile)
 
-data VerbosityLevel = 
-    DebugLevel      | 
-    InfoLevel       |
-    SeriousLevel    |
-    QuietLevel      
+data VerbosityLevel 
+    = DebugLevel
+    | InfoLevel
+    | SeriousLevel
+    | QuietLevel      
     deriving (Eq, Ord, Show, Read, G.Generic)
 
 instance Y.FromJSON VerbosityLevel
 instance Y.ToJSON VerbosityLevel
 
+data BackendType
+    = DirectoryBackend
+    | JARBackend
+    deriving (Eq, Ord, Show, Read, G.Generic)
+
+instance Y.FromJSON BackendType
+instance Y.ToJSON BackendType
+
 defaultGlobalConfigFile = pack $
-    "# Uncomment any one of the following lines.\n" ++
+    "####### Verbosity Options. Uncomment any one #######\n" ++
     "verbosity : DebugLevel\n" ++   -- currently uncommented : default level
     "# verbosity : InfoLevel\n" ++
     "# verbosity : SeriousLevel\n"++
-    "# verbosity : QuietLevel\n"
+    "# verbosity : QuietLevel\n\n"++
+    "####### Backend Options. Uncomment any one #######\n" ++
+    "backend : DirectoryBackend\n" ++ -- default backend
+    "# backend : JARBackend\n"
 
 initGlobalConfig :: IO ()
 initGlobalConfig = do
@@ -92,6 +105,9 @@ globalConfig = unsafePerformIO $ loadGlobalConfig
 
 getVerbosity :: VerbosityLevel
 getVerbosity = verbosity globalConfig
+
+getBackend :: BackendType
+getBackend = backend globalConfig
 
 logger :: VerbosityLevel -> String -> a -> a
 logger level message computation =
