@@ -14,6 +14,7 @@ module EtanolTools.Unsafe
     , debugLoggerM
     , infoLoggerM
     , seriousLoggerM
+    , assertCheck
     ) where
 
 import System.Exit (die)
@@ -105,6 +106,12 @@ globalConfig = unsafePerformIO $ loadGlobalConfig
 
 getVerbosity :: VerbosityLevel
 getVerbosity = verbosity globalConfig
+
+assertCheck :: Bool -> String -> IO ()
+assertCheck check msg = do
+    when (getVerbosity == DebugLevel) $
+        when (not check) $
+            die $ "ASSERTION FAILURE: " ++ msg
 
 getBackend :: BackendType
 getBackend = backend globalConfig
