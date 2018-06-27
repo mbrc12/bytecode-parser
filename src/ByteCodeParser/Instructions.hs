@@ -22,6 +22,8 @@ import ByteCodeParser.BasicTypes (CInfo, CodeAtom)
 import Control.Monad
 import Data.Binary.Get
 import qualified Data.ByteString.Lazy as BL
+import qualified Data.Vector as V
+import Data.Functor ((<$>)) 
 import Data.Int (Int32, Int64)
 import Data.List (zip)
 import Data.Word (Word16, Word32, Word8)
@@ -56,8 +58,8 @@ opPutStatic = 179
 
 opReturns = [176, 175, 174, 172, 173, 169, 177]
 
-readInstructions :: Int64 -> Get [CodeAtom]
-readInstructions till = readInstructionsIntoWords [] till 0
+readInstructions :: Int64 -> Get (V.Vector CodeAtom)
+readInstructions till = V.fromList <$> readInstructionsIntoWords [] till 0
 
 -- | Given current position returns how many to read to go to a multiple of 4
 toFour :: Int -> Int
@@ -99,10 +101,10 @@ readInstruction pos = do
                      if op == 132 -- iinc
                          then do
                              !others <- replicateM 4 getWord8
-                             return ((pos, [opcode, op] ++ others), pos + 6)
+                             return ((pos, BL.pack ([opcode, op] ++ others)), pos + 6)
                          else do
                              !others <- replicateM 2 getWord8
-                             return ((pos, [opcode, op] ++ others), pos + 4)
+                             return ((pos, BL.pack ([opcode, op] ++ others)), pos + 4)
                  170 -- tableswitch
                   -> do
                      let padding = toFour pos
@@ -118,7 +120,7 @@ readInstruction pos = do
                      !manyMore <- replicateM toRead getWord8
                      return $!
                          ( ( pos
-                           , [ opcode
+                           , BL.pack $! [ opcode
                              , d1
                              , d2
                              , d3
@@ -145,12 +147,12 @@ readInstruction pos = do
                      !manyMore <- replicateM toRead getWord8
                      return $!
                          ( ( pos
-                           , [opcode, d1, d2, d3, d4, n1, n2, n3, n4] ++
+                           , BL.pack $ [opcode, d1, d2, d3, d4, n1, n2, n3, n4] ++
                              manyMore)
                          , pos + 1 + padding + 8 + toRead)
         else do
             !bytes <- replicateM howManyMore getWord8
-            return $! ((pos, opcode : bytes), pos + 1 + howManyMore)
+            return $! ((pos, BL.pack $ opcode : bytes), pos + 1 + howManyMore)
 
 -- | assumes verified bytecodes, so no error
 -- | returns the number of more bytes to be consumed by this instruction

@@ -43,9 +43,12 @@ import Data.List (sort, zip)
 import Data.Word (Word16, Word32, Word8)
 import System.IO (FilePath)
 
+import qualified Data.ByteString.Lazy as BL
+
 import qualified Data.Text as T
 import qualified Data.Vector as V
 import Data.Vector ((!))
+
 -- | !! for [a] -> Word16
 (!@) :: V.Vector a -> Word16 -> a
 (!@) xs pos = xs ! fromIntegral pos
@@ -63,7 +66,7 @@ classFileExtension = ".class"
 -- | ClassName stands for just the name of the class.
 type ClassName = T.Text
 
-type CodeAtom = (Int, [Word8])
+type CodeAtom = (Int, BL.ByteString)
 
 -- | Produces the file path of the class from the ClassName
 getClassFilePath :: ClassName -> FilePath
@@ -78,7 +81,7 @@ data RawClassFile = RawClassFile
     , accessFlags :: ![ClassAccessFlag] -- Access Flags
     , thisClass :: !T.Text -- Name of this class
     , superClass :: !(Maybe T.Text) -- Name of superclass if any
-    , interfaces :: ![Word16]
+    , interfaces :: V.Vector Word16
     , fields :: ![FieldInfo] -- fields                         
     , methods :: ![MethodInfo] -- methods
     } deriving (Eq, Show)
@@ -420,7 +423,7 @@ data MethodParameter = MethodParameter
     } deriving (Eq, Show)
 
 -- | Attribute Info data
-{- TODO: Some structures below are represented as just bytes :: [Word8], which are the raw unparsed bytes.
+{- TODO: Some structures below are represented as just bytes :: BL.ByteString, which are the raw unparsed bytes.
          Since this is not a general purpose library, but is intended to be used within the Purity checker,
          not all the attributes are of value. Please add parsing code for them, as and when required, and
          replace the appropriate structure with its parsed format (possibly adding more structure).
@@ -434,10 +437,10 @@ data MethodParameter = MethodParameter
                 only for 'parseAttribute' in Reader.hs, and for debugging helps.
 -}
 data AInfo
-    = AIConstantValue { bytes :: ![Word8]
+    = AIConstantValue { bytes :: BL.ByteString
                         -- constantValueIndex      :: Word16
                        }
-    | AICode { bytes :: ![Word8]
+    | AICode { bytes :: !BL.ByteString
                         --maxStack                :: Word16,
                         --maxLocals               :: Word16,
                         --code                    :: [Instruction],               -- not defined yet
@@ -447,70 +450,70 @@ data AInfo
     | AIParsedCode { maxStack :: !Int
                    , maxLocals :: !Int
                    , codeLength :: !Int
-                   , code :: ![CodeAtom] -- contains opcodes paired with their arguments
+                   , code :: V.Vector CodeAtom -- contains opcodes paired with their arguments
                     }
-    | AIStackMapTable { bytes :: ![Word8]
+    | AIStackMapTable { bytes :: BL.ByteString
                         --entries                 :: [StackMapFrameEntry]         -- not defined yet
                        }
-    | AIExceptions { bytes :: ![Word8]
+    | AIExceptions { bytes :: BL.ByteString
                         --exceptionIndexTable     :: [Word16] 
                     }
-    | AIInnerClasses { bytes :: ![Word8]
+    | AIInnerClasses { bytes :: BL.ByteString
                         --innerClassInfoIndex     :: Word16,
                         --outerClassInfoIndex     :: Word16,
                         --innerNameIndex          :: Word16,
                         --innerClassAccessFlags   :: [AccessFlag]
                       }
-    | AIEnclosingSingleMethod { bytes :: ![Word8]
+    | AIEnclosingSingleMethod { bytes :: BL.ByteString
                         --classIndex              :: Word16,
                         --methodIndex             :: Word16
                                }
-    | AISynthetic { bytes :: ![Word8] }
-    | AISignature { bytes :: ![Word8]
+    | AISynthetic { bytes :: BL.ByteString }
+    | AISignature { bytes :: BL.ByteString
                         --signatureIndex          :: Word16
                    }
-    | AISourceFile { bytes :: ![Word8]
+    | AISourceFile { bytes :: BL.ByteString
                         --sourceFileIndex         :: Word16
                     }
-    | AISourceDebugExtension { bytes :: ![Word8]
-                        --debugExtension          :: [Word8]
+    | AISourceDebugExtension { bytes :: BL.ByteString
+                        --debugExtension          :: BL.ByteString
                               }
-    | AILineNumberTable { bytes :: ![Word8]
+    | AILineNumberTable { bytes :: BL.ByteString
                         --lineNumberTable         :: [LineNumberTableEntry]
                          }
-    | AILocalVariableTable { bytes :: ![Word8]
+    | AILocalVariableTable { bytes :: BL.ByteString
                         --localVariableTable      :: [LocalVariableTableEntry]
                             }
-    | AILocalVariableTypeTable { bytes :: ![Word8]
+    | AILocalVariableTypeTable { bytes :: BL.ByteString
                         --localVariableTypeTable  :: [LocalVariableTypeTableEntry]
                                 }
-    | AIDeprecated { bytes :: ![Word8] }
-    | AIRuntimeVisibleAnnotations { bytes :: ![Word8]
+    | AIDeprecated { bytes :: BL.ByteString }
+    | AIRuntimeVisibleAnnotations { bytes :: BL.ByteString
                         --annotations             :: [Annotation]                 -- not defined yet
                                    }
-    | AIRuntimeInvisibleAnnotations { bytes :: ![Word8]
+    | AIRuntimeInvisibleAnnotations { bytes :: BL.ByteString
                         --annotations             :: [Annotation]
                                      }
-    | AIRuntimeVisibleParameterAnnotations { bytes :: ![Word8]
+    | AIRuntimeVisibleParameterAnnotations { bytes :: BL.ByteString
                         --parameterAnnotations    :: [ParameterAnnotations]
                                             }
-    | AIRuntimeInvisibleParameterAnnotations { bytes :: ![Word8]
+    | AIRuntimeInvisibleParameterAnnotations { bytes :: BL.ByteString
                         --parameterAnnotations    :: [ParameterAnnotations]
                                               }
-    | AIRuntimeVisibleTypeAnnotations { bytes :: ![Word8]
+    | AIRuntimeVisibleTypeAnnotations { bytes :: BL.ByteString
                         --annotations             :: [TypeAnnotation]             -- not defined yet
                                        }
-    | AIRuntimeInvisibleTypeAnnotations { bytes :: ![Word8]
+    | AIRuntimeInvisibleTypeAnnotations { bytes :: BL.ByteString
                         --annotations             :: [TypeAnnotation]
                                          }
-    | AIAnnotationDefault { bytes :: ![Word8] }
-    | AIBootstrapMethods { bytes :: ![Word8]
+    | AIAnnotationDefault { bytes :: BL.ByteString }
+    | AIBootstrapMethods { bytes :: BL.ByteString
                         --bootstrapMethods        :: [BootstrapMethod]
                           }
-    | AIMethodParameters { bytes :: ![Word8]
+    | AIMethodParameters { bytes :: BL.ByteString
                         --parameters              :: [MethodParameter]
                           }
-    | AIParsedMethodParameters { parameters :: ![MethodParameter] }
+    | AIParsedMethodParameters { parameters :: [MethodParameter] }
     | AIDummy
                         -- added just for `parseParseableAttribute' in Reader.hs
     deriving (Eq, Show)

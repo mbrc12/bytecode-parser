@@ -13,18 +13,19 @@ import Control.Monad (forM, replicateM, when)
 import Data.Binary.Get (Get, getWord16be, getWord32be, getWord8, runGet, bytesRead)
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
+import qualified Data.ByteString.Lazy.Char8 as BLC8
 import Data.Char (chr)
 import Data.Either
 import Data.Int (Int64)
 import Data.Word (Word16, Word32, Word8)
 import System.IO (FilePath, Handle, IOMode, hGetContents, withFile)
 
-
-
 import Control.Monad.Trans.Class
 import Control.Monad.ST.Trans
 
 import qualified Data.Text as T
+import qualified Data.Text.Encoding as TD
+
 import qualified Data.Vector as V
 import Data.Vector ((!))
 
@@ -42,10 +43,10 @@ getClassFileStream className =
   where
     classFilePath = getClassFilePath className
 
-getRawBytes :: Int ->  Get [Word8]
+getRawBytes :: Int ->  Get BL.ByteString
 getRawBytes how_many = do
-    result <- forM [1 .. how_many] (const getWord8)
-    return $! result
+    result <- forM [1..how_many] (const getWord8)
+    return $! BL.pack result
 
 -- | Reads the magic number, and checks if its okay.
 readMagicNumber :: Get Word32
@@ -192,7 +193,7 @@ readConstFromPool = do
   where
     getBytes :: Word16 -> Get T.Text
     getBytes len =
-        fmap T.pack $! (fmap . fmap) (chr . fromIntegral) $! forM [1 .. len] $! const getWord8
+        (TD.decodeUtf8 . BLC8.toStrict) <$> getRawBytes (fromIntegral len)  --forM [1 .. len] $! const getWord8
 
 -- | Read the Constant Pool
 readConstantPool :: Get (V.Vector ConstantInfo)
@@ -276,10 +277,10 @@ readSuperClass constPool = do
               in string . info $! constPool !@ classNameIndex
 
 -- | Interfaces and interface count
-readInterfaces :: Get [Word16]
+readInterfaces :: Get (V.Vector Word16)
 readInterfaces = do
     interfacesCount <- getWord16be
-    forM [1 .. interfacesCount] (\_ -> pure pred <*> getWord16be)
+    V.fromList <$> forM [1 .. interfacesCount] (\_ -> pure pred <*> getWord16be)
 
 codeParser :: Get AInfo
 -- returns a AIParsedCode 
@@ -316,16 +317,16 @@ methodParametersParser constPool = do
     return $! AIParsedMethodParameters params
 
 -- | Parse attributes for which there are special methods
-parseParseableAttribute :: V.Vector ConstantInfo -> AttributeType -> [Word8] -> AInfo
+parseParseableAttribute :: V.Vector ConstantInfo -> AttributeType -> BL.ByteString -> AInfo
 parseParseableAttribute constPool attrType bytes =
     case attrType of
-        ATCode -> runGet codeParser (BL.pack bytes)
+        ATCode -> runGet codeParser bytes
         ATMethodParameters ->
-            runGet (methodParametersParser constPool) (BL.pack bytes)
+            runGet (methodParametersParser constPool) bytes
         _ -> AIDummy -- added just so that this typechecks 
 
 -- | Parse the raw bytes info for attributes if possible
-parseAttribute :: V.Vector ConstantInfo -> AttributeType -> [Word8] -> AInfo
+parseAttribute :: V.Vector ConstantInfo -> AttributeType -> BL.ByteString -> AInfo
 parseAttribute constPool attributeType byteInfo =
     case attributeType of
         ATConstantValue ->
