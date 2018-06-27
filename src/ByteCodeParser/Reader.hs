@@ -192,8 +192,8 @@ readConstFromPool = do
                 -- | getBytes gets len bytes from the input
   where
     getBytes :: Word16 -> Get T.Text
-    getBytes len =
-        (TD.decodeUtf8 . BLC8.toStrict) <$> getRawBytes (fromIntegral len)  --forM [1 .. len] $! const getWord8
+    getBytes len = -- Latin1 is used as opposed to Utf8 because chars like \xc0 etc can occur
+        (TD.decodeLatin1 . BLC8.toStrict) <$> getRawBytes (fromIntegral len)  --forM [1 .. len] $! const getWord8
 
 -- | Read the Constant Pool
 readConstantPool :: Get (V.Vector ConstantInfo)

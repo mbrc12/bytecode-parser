@@ -1,4 +1,5 @@
-{-# LANGUAGE OverloadedStrings, DuplicateRecordFields, BangPatterns #-}
+{-# LANGUAGE OverloadedStrings, DuplicateRecordFields, BangPatterns, 
+    MultiWayIf #-}
 
 module ByteCodeParser.BasicTypes
     ( (!@)
