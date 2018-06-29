@@ -33,8 +33,7 @@ dependencies:
 
 library:
   source-dirs: src
-  dependencies:
-
+ 
 executables:
     bptester:
         main:           Main.hs
