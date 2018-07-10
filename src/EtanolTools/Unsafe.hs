@@ -6,6 +6,7 @@ module EtanolTools.Unsafe
     ( Configuration(..)
     , VerbosityLevel(..)
     , BackendType(..)
+    , globalConfigFile
     , getVerbosity
     , getBackend
     , debugLogger
@@ -57,7 +58,6 @@ globalConfigFile = do
     let home = fromJust hDir
     exs <- doesDirectoryExist (home </> confDir)
     when (not exs) $ do
-        infoLoggerM $ "Creating etanol config directory ~/"++ confDir
         createDirectory (home </> confDir)
 
     return (home </> confDir </> confFile)
