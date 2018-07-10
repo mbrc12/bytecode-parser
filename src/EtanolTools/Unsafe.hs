@@ -29,10 +29,17 @@ import qualified Data.ByteString as B
 import Data.ByteString.Char8 (pack)
 import System.Environment (lookupEnv)
 import System.FilePath.Posix((</>))
-import System.Directory (doesFileExist)
+import System.Directory 
+    ( doesFileExist
+    , doesDirectoryExist
+    , createDirectory
+    )
 
-confFile :: String
-confFile = ".etanolglobalconfig"
+confFile :: FilePath
+confFile = "config"
+
+confDir :: FilePath
+confDir = ".etanol"
 
 data Configuration = Configuration {
     verbosity :: VerbosityLevel,
@@ -45,9 +52,15 @@ instance Y.ToJSON Configuration
 globalConfigFile :: IO String
 globalConfigFile = do
     hDir <- lookupEnv "HOME"
-    if isNothing hDir
-    then die $ "Please set the HOME environment variable."
-    else return ((fromJust hDir) </> confFile)
+    when (isNothing hDir) $
+        die $ "Please set the HOME environment variable."
+    let home = fromJust hDir
+    exs <- doesDirectoryExist (home </> confDir)
+    when (not exs) $ do
+        infoLoggerM $ "Creating etanol config directory ~/"++ confDir
+        createDirectory (home </> confDir)
+
+    return (home </> confDir </> confFile)
 
 data VerbosityLevel 
     = DebugLevel
