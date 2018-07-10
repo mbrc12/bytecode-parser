@@ -82,8 +82,8 @@ instance Y.ToJSON BackendType
 
 defaultGlobalConfigFile = pack $
     "####### Verbosity Options. Uncomment any one #######\n" ++
-    "verbosity : DebugLevel\n" ++   -- currently uncommented : default level
-    "# verbosity : InfoLevel\n" ++
+    "# verbosity : DebugLevel\n" ++   
+    "verbosity : InfoLevel\n" ++      -- info level is the default
     "# verbosity : SeriousLevel\n"++
     "# verbosity : QuietLevel\n\n"++
     "####### Backend Options. Uncomment any one #######\n" ++
