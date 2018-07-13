@@ -6,6 +6,7 @@ module EtanolTools.Unsafe
     ( Configuration(..)
     , VerbosityLevel(..)
     , BackendType(..)
+    , AbortOnAbsence(..)
     , globalConfigFile
     , getVerbosity
     , getBackend
@@ -16,6 +17,7 @@ module EtanolTools.Unsafe
     , infoLoggerM
     , seriousLoggerM
     , assertCheck
+    , getAbortOnAbsence
     ) where
 
 import System.Exit (die)
@@ -42,10 +44,11 @@ confFile = "config"
 confDir :: FilePath
 confDir = ".etanol"
 
-data Configuration = Configuration {
-    verbosity :: VerbosityLevel,
-    backend   :: BackendType
-} deriving (Show, Read, Eq, Ord, G.Generic)
+data Configuration = Configuration 
+    { verbosity :: VerbosityLevel
+    , backend   :: BackendType
+    , abortOnAbsence :: AbortOnAbsence
+    } deriving (Show, Read, Eq, Ord, G.Generic)
 
 instance Y.FromJSON Configuration
 instance Y.ToJSON Configuration
@@ -80,6 +83,14 @@ data BackendType
 instance Y.FromJSON BackendType
 instance Y.ToJSON BackendType
 
+data AbortOnAbsence
+    = Abort
+    | DoNotAbort
+    deriving (Eq, Ord, Show, Read, G.Generic) 
+
+instance Y.FromJSON AbortOnAbsence
+instance Y.ToJSON AbortOnAbsence
+
 defaultGlobalConfigFile = pack $
     "####### Verbosity Options. Uncomment any one #######\n" ++
     "# verbosity : DebugLevel\n" ++   
@@ -88,7 +99,10 @@ defaultGlobalConfigFile = pack $
     "# verbosity : QuietLevel\n\n"++
     "####### Backend Options. Uncomment any one #######\n" ++
     "backend : DirectoryBackend\n" ++ -- default backend
-    "# backend : JARBackend\n"
+    "# backend : JARBackend\n" ++
+    "####### Abort On Absence. Uncomment any one #######\n" ++
+    "abortOnAbsence : Abort\n" ++     -- by default abort on absence
+    "# abortOnAbsence : DoNotAbort\n"
 
 initGlobalConfig :: IO ()
 initGlobalConfig = do
@@ -128,6 +142,9 @@ assertCheck check msg = do
 
 getBackend :: BackendType
 getBackend = backend globalConfig
+
+getAbortOnAbsence :: AbortOnAbsence
+getAbortOnAbsence = abortOnAbsence globalConfig
 
 logger :: VerbosityLevel -> String -> a -> a
 logger level message computation =
